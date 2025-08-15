@@ -75,7 +75,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $reportTitle; ?> - ISAT U Library</title>
+    <title><?php echo $reportTitle; ?> - ISAT U Miagao Campus Library</title>
     <style>
         @page {
             margin: 0.75in 0.5in;

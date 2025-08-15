@@ -1,8 +1,6 @@
 <?php
-// Start output buffering to prevent header issues
 ob_start();
 
-// Include necessary files but don't output HTML yet
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -51,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Now set page title and include header
-$page_title = "Edit Book - ISAT U Library";
+$page_title = "Edit Book - ISAT U Library Miagao Campus";
 include '../includes/header.php';
 ?>
 

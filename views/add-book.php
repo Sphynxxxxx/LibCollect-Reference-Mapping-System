@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Now set page title and include header
-$page_title = "Add Book - ISAT U Library";
+$page_title = "Add Book - ISAT U Library Miagao Campus";
 include '../includes/header.php';
 ?>
 

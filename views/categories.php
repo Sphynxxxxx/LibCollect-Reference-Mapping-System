@@ -1,5 +1,5 @@
 <?php
-$page_title = "Categories - ISAT U Library";
+$page_title = "Categories - ISAT U Library Miagao Campus";
 include '../includes/header.php';
 include '../classes/Book.php';
 
@@ -10,7 +10,7 @@ $categoryCounts = array_column($stats['by_category'], 'count', 'category');
 
 <div class="page-header">
     <h1 class="h2 mb-2">Categories</h1>
-    <p class="mb-0">Manage book categories for ISAT U programs</p>
+    <p class="mb-0">Manage book categories for ISAT U Miagao Campus programs</p>
 </div>
 
 <div class="row">

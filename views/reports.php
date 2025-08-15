@@ -38,7 +38,7 @@ if ($printMode) {
 }
 
 // Now set page title and include header
-$page_title = "Reports - ISAT U Library";
+$page_title = "Reports - ISAT U Library Miagao Campus";
 include '../includes/header.php';
 ?>
 

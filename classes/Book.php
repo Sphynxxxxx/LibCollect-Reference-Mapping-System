@@ -1,9 +1,14 @@
 <?php
+require_once 'ActivityLogger.php';
+
 class Book {
     private $pdo;
+    private $logger;
     
     public function __construct($pdo) {
         $this->pdo = $pdo;
+        // Initialize activity logging
+        $this->logger = new ActivityLogger($pdo);
     }
     
     public function getAllBooks($category = '', $search = '') {
@@ -52,7 +57,7 @@ class Book {
             }
             
             $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, quantity, description, subject_name, semester, section, year_level, course_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            return $stmt->execute([
+            $result = $stmt->execute([
                 $data['title'],
                 $data['author'],
                 $data['isbn'] ?? '',
@@ -65,6 +70,27 @@ class Book {
                 $data['year_level'] ?? '',
                 $data['course_code'] ?? ''
             ]);
+            
+            if ($result) {
+                $bookId = $this->pdo->lastInsertId();
+                
+                // Log the activity using the new ActivityLogger
+                $bookData = [
+                    'id' => $bookId,
+                    'title' => $data['title'],
+                    'category' => $data['category']
+                ];
+                
+                $this->logger->logBookActivity(
+                    'add',
+                    $bookData,
+                    "Quantity: {$data['quantity']}, Author: {$data['author']}"
+                );
+                
+                return $bookId;
+            }
+            
+            return false;
         } catch (PDOException $e) {
             error_log("Error in addBook: " . $e->getMessage());
             return false;
@@ -77,8 +103,11 @@ class Book {
                 return false;
             }
             
+            // Get old book details for comparison
+            $oldBook = $this->getBookById($id);
+            
             $stmt = $this->pdo->prepare("UPDATE books SET title=?, author=?, isbn=?, category=?, quantity=?, description=?, subject_name=?, semester=?, section=?, year_level=?, course_code=? WHERE id=?");
-            return $stmt->execute([
+            $result = $stmt->execute([
                 $data['title'],
                 $data['author'],
                 $data['isbn'] ?? '',
@@ -92,6 +121,38 @@ class Book {
                 $data['course_code'] ?? '',
                 $id
             ]);
+            
+            if ($result) {
+                // Log the activity with change details
+                if ($oldBook) {
+                    $changes = [];
+                    
+                    if ($oldBook['title'] !== $data['title']) {
+                        $changes[] = "title changed from '{$oldBook['title']}' to '{$data['title']}'";
+                    }
+                    if ($oldBook['author'] !== $data['author']) {
+                        $changes[] = "author changed from '{$oldBook['author']}' to '{$data['author']}'";
+                    }
+                    if ($oldBook['category'] !== $data['category']) {
+                        $changes[] = "category changed from '{$oldBook['category']}' to '{$data['category']}'";
+                    }
+                    if ($oldBook['quantity'] != ($data['quantity'] ?? 1)) {
+                        $changes[] = "quantity changed from {$oldBook['quantity']} to " . ($data['quantity'] ?? 1);
+                    }
+                    
+                    $additionalInfo = !empty($changes) ? implode(', ', $changes) : 'Minor updates';
+                    
+                    $bookData = [
+                        'id' => $id,
+                        'title' => $data['title'],
+                        'category' => $data['category']
+                    ];
+                    
+                    $this->logger->logBookActivity('update', $bookData, $additionalInfo);
+                }
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error in updateBook: " . $e->getMessage());
             return false;
@@ -100,8 +161,22 @@ class Book {
     
     public function deleteBook($id) {
         try {
+            // Get book details before deletion for logging
+            $book = $this->getBookById($id);
+            
             $stmt = $this->pdo->prepare("DELETE FROM books WHERE id=?");
-            return $stmt->execute([$id]);
+            $result = $stmt->execute([$id]);
+            
+            if ($result && $book) {
+                // Log the activity
+                $this->logger->logBookActivity(
+                    'delete',
+                    $book,
+                    "Permanently removed from library"
+                );
+            }
+            
+            return $result;
         } catch (PDOException $e) {
             error_log("Error in deleteBook: " . $e->getMessage());
             return false;
@@ -124,14 +199,98 @@ class Book {
             $stmt = $this->pdo->query("SELECT category, COUNT(*) as count FROM books GROUP BY category");
             $stats['by_category'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
+            // Borrowed books
+            $stmt = $this->pdo->query("SELECT COUNT(*) as borrowed_books FROM borrowing WHERE status = 'borrowed'");
+            $borrowedStats = $stmt->fetch();
+            $stats['borrowed_books'] = $borrowedStats['borrowed_books'] ?? 0;
+            
+            // Available copies (total copies - borrowed)
+            $stats['available_copies'] = $stats['total_copies'] - $stats['borrowed_books'];
+            
             return $stats;
         } catch (PDOException $e) {
             error_log("Error in getBookStats: " . $e->getMessage());
             return [
                 'total_books' => 0,
                 'total_copies' => 0,
+                'borrowed_books' => 0,
+                'available_copies' => 0,
                 'by_category' => []
             ];
+        }
+    }
+    
+    // Borrowing methods with activity logging
+    public function borrowBook($bookId, $borrowerName, $borrowerEmail, $dueDate) {
+        try {
+            $this->pdo->beginTransaction();
+            
+            // Get book details
+            $book = $this->getBookById($bookId);
+            if (!$book || $book['quantity'] <= 0) {
+                throw new Exception("Book not available for borrowing");
+            }
+            
+            // Add borrowing record
+            $sql = "INSERT INTO borrowing (book_id, borrower_name, borrower_email, due_date) VALUES (?, ?, ?, ?)";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$bookId, $borrowerName, $borrowerEmail, $dueDate]);
+            
+            // Update book quantity
+            $sql = "UPDATE books SET quantity = quantity - 1 WHERE id = ?";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$bookId]);
+            
+            $this->pdo->commit();
+            
+            // Log the borrowing activity
+            $this->logger->logBorrowingActivity('borrow', $book['title'], $borrowerName, "Due: {$dueDate}");
+            
+            return true;
+        } catch (Exception $e) {
+            $this->pdo->rollBack();
+            error_log("Book borrowing failed: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    public function returnBook($borrowingId) {
+        try {
+            $this->pdo->beginTransaction();
+            
+            // Get borrowing details
+            $sql = "SELECT b.*, bk.title FROM borrowing b 
+                    JOIN books bk ON b.book_id = bk.id 
+                    WHERE b.id = ? AND b.status = 'borrowed'";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$borrowingId]);
+            $borrowing = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$borrowing) {
+                throw new Exception("Borrowing record not found or already returned");
+            }
+            
+            // Update borrowing record
+            $sql = "UPDATE borrowing SET returned_date = NOW(), status = 'returned' WHERE id = ?";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$borrowingId]);
+            
+            // Update book quantity
+            $sql = "UPDATE books SET quantity = quantity + 1 WHERE id = ?";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([$borrowing['book_id']]);
+            
+            $this->pdo->commit();
+            
+            // Log the return activity
+            $returnStatus = (strtotime($borrowing['due_date']) < time()) ? "(Late return)" : "";
+            $this->logger->logBorrowingActivity('return', $borrowing['title'], $borrowing['borrower_name'], $returnStatus);
+            
+            return true;
+        } catch (Exception $e) {
+            $this->pdo->rollBack();
+            error_log("Book return failed: " . $e->getMessage());
+            return false;
         }
     }
     
@@ -172,8 +331,6 @@ class Book {
     
     public function getDepartmentStatistics() {
         try {
-            $stats = [];
-            
             $query = "
                 SELECT 
                     category,
@@ -295,6 +452,10 @@ class Book {
             
             $stmt = $this->pdo->prepare($query);
             $stmt->execute($params);
+            
+            // Log search activity
+            $this->logger->logUserActivity('search', "Searched for: \"{$searchTerm}\"");
+            
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             error_log("Error in searchBooks: " . $e->getMessage());
@@ -328,9 +489,165 @@ class Book {
                 ];
             }
             
+            // Log export activity
+            $departmentText = ($department === 'all') ? 'all departments' : $department . ' department';
+            $this->logger->logUserActivity(
+                'export',
+                "Exported books data in CSV format (" . count($books) . " books from " . $departmentText . ")"
+            );
+            
             return $csvData;
         } catch (PDOException $e) {
             error_log("Error in exportToCSV: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    // Bulk operations with activity logging
+    public function bulkImport($books) {
+        try {
+            $importedCount = 0;
+            $errors = [];
+            
+            $this->pdo->beginTransaction();
+            
+            foreach ($books as $index => $bookData) {
+                if ($this->addBook($bookData)) {
+                    $importedCount++;
+                } else {
+                    $errors[] = "Row " . ($index + 1) . ": Failed to import book";
+                }
+            }
+            
+            $this->pdo->commit();
+            
+            // Log import activity
+            $description = "Imported {$importedCount} books";
+            if (!empty($errors)) {
+                $description .= " with " . count($errors) . " errors";
+            }
+            
+            $this->logger->logUserActivity('import', $description);
+            
+            return [
+                'success' => true,
+                'imported' => $importedCount,
+                'errors' => $errors
+            ];
+            
+        } catch (Exception $e) {
+            $this->pdo->rollBack();
+            error_log("Error in bulkImport: " . $e->getMessage());
+            return [
+                'success' => false,
+                'imported' => 0,
+                'errors' => [$e->getMessage()]
+            ];
+        }
+    }
+    
+    public function bulkDelete($ids) {
+        try {
+            if (empty($ids)) {
+                return false;
+            }
+            
+            // Get book details before deletion
+            $placeholders = str_repeat('?,', count($ids) - 1) . '?';
+            $stmt = $this->pdo->prepare("SELECT id, title, category FROM books WHERE id IN ($placeholders)");
+            $stmt->execute($ids);
+            $books = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Delete books
+            $stmt = $this->pdo->prepare("DELETE FROM books WHERE id IN ($placeholders)");
+            $result = $stmt->execute($ids);
+            
+            if ($result) {
+                $titles = array_column($books, 'title');
+                $this->logger->logUserActivity(
+                    'delete',
+                    'Bulk deleted ' . count($books) . ' books: ' . implode(', ', array_slice($titles, 0, 3)) . (count($titles) > 3 ? '...' : '')
+                );
+            }
+            
+            return $result;
+        } catch (PDOException $e) {
+            error_log("Error in bulkDelete: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    // Activity logging helper methods
+    public function logCustomActivity($action, $description, $bookId = null, $bookTitle = null, $category = null) {
+        return $this->logger->log($action, $description, $bookId, $bookTitle, $category);
+    }
+    
+    public function getActivityLog($limit = 10) {
+        return $this->logger->getRecentActivities($limit);
+    }
+    
+    public function getOverdueBooks() {
+        try {
+            $sql = "SELECT b.*, bk.title, bk.author FROM borrowing b 
+                    JOIN books bk ON b.book_id = bk.id 
+                    WHERE b.status = 'borrowed' AND b.due_date < CURDATE()";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Failed to get overdue books: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    public function markOverdueBooks() {
+        try {
+            $sql = "UPDATE borrowing SET status = 'overdue' 
+                    WHERE status = 'borrowed' AND due_date < CURDATE()";
+            $stmt = $this->pdo->prepare($sql);
+            $result = $stmt->execute();
+            
+            if ($result && $stmt->rowCount() > 0) {
+                // Log overdue marking
+                $this->logger->logUserActivity('system', "Marked {$stmt->rowCount()} books as overdue");
+            }
+            
+            return $stmt->rowCount();
+        } catch (PDOException $e) {
+            error_log("Failed to mark overdue books: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    public function getBorrowingHistory($limit = 20) {
+        try {
+            $sql = "SELECT b.*, bk.title, bk.author, bk.category 
+                    FROM borrowing b 
+                    JOIN books bk ON b.book_id = bk.id 
+                    ORDER BY b.borrowed_date DESC 
+                    LIMIT ?";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->bindParam(1, $limit, PDO::PARAM_INT);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Failed to get borrowing history: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    public function getCurrentBorrowings() {
+        try {
+            $sql = "SELECT b.*, bk.title, bk.author, bk.category 
+                    FROM borrowing b 
+                    JOIN books bk ON b.book_id = bk.id 
+                    WHERE b.status IN ('borrowed', 'overdue')
+                    ORDER BY b.due_date ASC";
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Failed to get current borrowings: " . $e->getMessage());
             return [];
         }
     }
@@ -350,11 +667,36 @@ class Book {
             $count = $stmt->fetch()['count'];
             error_log("Total books in database: " . $count);
             
+            // Check if activity logging is working
+            if ($this->logger) {
+                error_log("Activity logging is enabled");
+                $recentActivities = $this->logger->getRecentActivities(5);
+                error_log("Recent activities count: " . count($recentActivities));
+            } else {
+                error_log("Activity logging is NOT enabled");
+            }
+            
             return true;
         } catch (PDOException $e) {
             error_log("Database debug error: " . $e->getMessage());
             return false;
         }
+    }
+    
+    // Test method for activity logging
+    public function testActivityLogging() {
+        return $this->logger->log(
+            'test',
+            'Testing activity logging system from Book class at ' . date('Y-m-d H:i:s'),
+            999,
+            'Test Book Title',
+            'BIT'
+        );
+    }
+    
+    // Method to get logger instance (useful for other classes)
+    public function getLogger() {
+        return $this->logger;
     }
 }
 ?>
