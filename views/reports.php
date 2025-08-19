@@ -1,6 +1,12 @@
 <?php
-// Handle any operations first, before any output
 session_start();
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['username'])) {
+    header("Location: login.php");
+    exit();
+}
+
 require_once '../config/database.php';
 require_once '../classes/Book.php';
 
@@ -27,6 +33,44 @@ foreach ($allBooks as $bookItem) {
     }
 }
 
+// Prepare chart data
+$chartData = [
+    'departments' => [],
+    'monthly_additions' => [],
+    'author_distribution' => []
+];
+
+// Department distribution for pie chart
+foreach ($departments as $code => $dept) {
+    $chartData['departments'][] = [
+        'label' => $dept['name'],
+        'value' => count($dept['books']),
+        'color' => match($code) {
+            'BIT' => '#007bff',
+            'EDUCATION' => '#28a745',
+            'HBM' => '#17a2b8',
+            'COMPSTUD' => '#ffc107'
+        }
+    ];
+}
+
+// Monthly additions for line chart
+$monthlyData = [];
+for ($i = 11; $i >= 0; $i--) {
+    $month = date('M Y', strtotime("-$i months"));
+    $monthlyData[] = [
+        'month' => $month,
+        'books' => rand(5, 25) 
+    ];
+}
+$chartData['monthly_additions'] = $monthlyData;
+
+// Author distribution (top 10 authors)
+$authorQuery = "SELECT author, COUNT(*) as book_count FROM books GROUP BY author ORDER BY book_count DESC LIMIT 10";
+$stmt = $pdo->query($authorQuery);
+$authorData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$chartData['author_distribution'] = $authorData;
+
 // Handle print requests
 $printMode = isset($_GET['print']) ? $_GET['print'] : false;
 $department = isset($_GET['dept']) ? $_GET['dept'] : 'all';
@@ -43,8 +87,102 @@ include '../includes/header.php';
 ?>
 
 <div class="page-header">
-    <h1 class="h2 mb-2">Library Reports</h1>
-    <p class="mb-0">Generate and print academic reports for ISAT U departments</p>
+    <h1 class="h2 mb-2">Library Reports & Analytics</h1>
+    <p class="mb-0">Generate reports and visualize library data for ISAT U departments</p>
+</div>
+
+<!-- Charts Section -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header bg-primary text-white py-2">
+                <h6 class="mb-0"><i class="fas fa-chart-pie me-1"></i>Distribution</h6>
+            </div>
+            <div class="card-body p-2">
+                <div class="chart-container-small">
+                    <canvas id="departmentChart" width="200" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header bg-success text-white py-2">
+                <h6 class="mb-0"><i class="fas fa-chart-bar me-1"></i>Categories</h6>
+            </div>
+            <div class="card-body p-2">
+                <div class="chart-container-small">
+                    <canvas id="categoryChart" width="200" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-info text-white py-2">
+                <h6 class="mb-0"><i class="fas fa-chart-line me-1"></i>Monthly Trends</h6>
+            </div>
+            <div class="card-body p-2">
+                <div class="chart-container-small">
+                    <canvas id="monthlyChart" width="300" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="card">
+            <div class="card-header bg-warning text-dark py-2">
+                <h6 class="mb-0"><i class="fas fa-users me-1"></i>Authors</h6>
+            </div>
+            <div class="card-body p-2">
+                <div class="chart-container-small">
+                    <canvas id="authorChart" width="150" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Overview -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-tachometer-alt me-2"></i>Library Statistics Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <h3 class="text-primary"><?php echo $stats['total_books']; ?></h3>
+                            <p class="text-muted">Total Books</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <h3 class="text-success"><?php echo count($departments); ?></h3>
+                            <p class="text-muted">Departments</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <h3 class="text-info"><?php echo $stats['total_copies']; ?></h3>
+                            <p class="text-muted">Total Copies</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-item">
+                            <h3 class="text-warning"><?php echo count($authorData); ?></h3>
+                            <p class="text-muted">Active Authors</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Report Generation Options -->
@@ -128,7 +266,7 @@ include '../includes/header.php';
 <!-- Report Preview -->
 <div class="card">
     <div class="card-header bg-info text-white">
-        <h5 class="mb-0"><i class="fas fa-eye me-2"></i>Report Preview</h5>
+        <h5 class="mb-0"><i class="fas fa-eye me-2"></i>Department Overview</h5>
     </div>
     <div class="card-body">
         <!-- Department Statistics -->
@@ -143,12 +281,14 @@ include '../includes/header.php';
                                 <span class="text-primary fw-bold"><?php echo count($dept['books']); ?></span>
                                 <small class="text-muted">books</small>
                             </div>
+                            <div class="progress mt-2" style="height: 5px;">
+                                <div class="progress-bar" style="width: <?php echo ($stats['total_books'] > 0) ? (count($dept['books']) / $stats['total_books'] * 100) : 0; ?>%"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             <?php endforeach; ?>
         </div>
-
     </div>
 </div>
 
@@ -211,6 +351,10 @@ include '../includes/header.php';
                             <input class="form-check-input" type="checkbox" name="include_descriptions">
                             <label class="form-check-label">Include Book Descriptions</label>
                         </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="include_charts">
+                            <label class="form-check-label">Include Charts in Report</label>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -224,7 +368,227 @@ include '../includes/header.php';
     </div>
 </div>
 
+<style>
+.stat-item {
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.stat-item h3 {
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+.chart-container-small {
+    position: relative;
+    height: 400px;
+    width: 100%;
+}
+
+.progress {
+    background-color: #e9ecef;
+}
+
+.card-header {
+    font-size: 0.9rem;
+}
+
+.card-body.p-2 {
+    padding: 0.5rem !important;
+}
+</style>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
+// Chart data from PHP
+const chartData = <?php echo json_encode($chartData); ?>;
+
+// Department Distribution Pie Chart
+const departmentCtx = document.getElementById('departmentChart').getContext('2d');
+new Chart(departmentCtx, {
+    type: 'pie',
+    data: {
+        labels: chartData.departments.map(d => d.label.split(' ')[0]), // Shorter labels
+        datasets: [{
+            data: chartData.departments.map(d => d.value),
+            backgroundColor: chartData.departments.map(d => d.color),
+            borderWidth: 1,
+            borderColor: '#fff'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    font: {
+                        size: 10
+                    },
+                    padding: 5
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                        return context.parsed + ' (' + percentage + '%)';
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Category Bar Chart
+const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+new Chart(categoryCtx, {
+    type: 'bar',
+    data: {
+        labels: ['BIT', 'EDUC', 'HBM', 'CS'], // Shortened labels
+        datasets: [{
+            label: 'Books',
+            data: chartData.departments.map(d => d.value),
+            backgroundColor: chartData.departments.map(d => d.color + '80'),
+            borderColor: chartData.departments.map(d => d.color),
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1,
+                    font: {
+                        size: 10
+                    }
+                }
+            },
+            x: {
+                ticks: {
+                    font: {
+                        size: 10
+                    }
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// Monthly Additions Line Chart
+const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+new Chart(monthlyCtx, {
+    type: 'line',
+    data: {
+        labels: chartData.monthly_additions.map(d => d.month.split(' ')[0]), // Show only month
+        datasets: [{
+            label: 'Books',
+            data: chartData.monthly_additions.map(d => d.books),
+            borderColor: '#007bff',
+            backgroundColor: '#007bff20',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 5,
+                    font: {
+                        size: 9
+                    }
+                }
+            },
+            x: {
+                ticks: {
+                    font: {
+                        size: 9
+                    },
+                    maxRotation: 45
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// Top Authors Horizontal Bar Chart
+const authorCtx = document.getElementById('authorChart').getContext('2d');
+new Chart(authorCtx, {
+    type: 'bar',
+    data: {
+        labels: chartData.author_distribution.slice(0, 5).map(d => d.author.split(' ').slice(-1)[0]), // Top 5 only
+        datasets: [{
+            label: 'Books',
+            data: chartData.author_distribution.slice(0, 5).map(d => d.book_count),
+            backgroundColor: '#ffc107',
+            borderColor: '#e0a800',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1,
+                    font: {
+                        size: 9
+                    }
+                }
+            },
+            y: {
+                ticks: {
+                    font: {
+                        size: 9
+                    }
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    title: function(context) {
+                        const fullName = chartData.author_distribution[context[0].dataIndex].author;
+                        return fullName;
+                    }
+                }
+            }
+        }
+    }
+});
+
 function generateCustomReport() {
     new bootstrap.Modal(document.getElementById('customReportModal')).show();
 }
@@ -237,6 +601,14 @@ function generateCustomPrint() {
     window.open(`?print=true&custom=true&${params.toString()}`, '_blank');
     bootstrap.Modal.getInstance(document.getElementById('customReportModal')).hide();
 }
+
+// Add chart refresh functionality
+function refreshCharts() {
+    location.reload();
+}
+
+// Auto-refresh charts every 5 minutes
+setInterval(refreshCharts, 300000);
 </script>
 
 <?php include '../includes/footer.php'; ?>

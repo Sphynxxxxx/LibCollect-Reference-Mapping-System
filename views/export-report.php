@@ -100,7 +100,7 @@ if ($exportType === 'csv') {
     exit;
 
 } elseif ($exportType === 'excel') {
-    // Simple Excel format (HTML table with Excel MIME type)
+    // Simple Excel format 
     header('Content-Type: application/vnd.ms-excel');
     header('Content-Disposition: attachment; filename="' . $filename . '.xls"');
     header('Pragma: no-cache');

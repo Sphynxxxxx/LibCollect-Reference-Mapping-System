@@ -7,7 +7,6 @@ $database = new Database();
 $pdo = $database->connect();
 $book = new Book($pdo);
 
-// Handle form submissions BEFORE any HTML output
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
@@ -17,6 +16,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $_SESSION['message_type'] = 'success';
                 } else {
                     $_SESSION['message'] = 'Failed to delete book!';
+                    $_SESSION['message_type'] = 'danger';
+                }
+                break;
+            case 'delete_multiple':
+                $deleted_count = 0;
+                if (isset($_POST['ids']) && is_array($_POST['ids'])) {
+                    foreach ($_POST['ids'] as $id) {
+                        if ($book->deleteBook($id)) {
+                            $deleted_count++;
+                        }
+                    }
+                }
+                if ($deleted_count > 0) {
+                    $_SESSION['message'] = "Successfully deleted {$deleted_count} book record(s)!";
+                    $_SESSION['message_type'] = 'success';
+                } else {
+                    $_SESSION['message'] = 'Failed to delete books!';
                     $_SESSION['message_type'] = 'danger';
                 }
                 break;
@@ -58,17 +74,57 @@ $departments = [
     ]
 ];
 
+// Function to merge duplicate books
+function mergeBooks($books) {
+    $mergedBooks = [];
+    
+    foreach ($books as $book) {
+        // Create a unique key based on title, author, ISBN, and publication year
+        $key = md5(strtolower($book['title'] . '|' . $book['author'] . '|' . $book['isbn'] . '|' . ($book['publication_year'] ?? '')));
+        
+        if (!isset($mergedBooks[$key])) {
+            // First occurrence of this book
+            $mergedBooks[$key] = $book;
+            $mergedBooks[$key]['total_quantity'] = $book['quantity'];
+            $mergedBooks[$key]['academic_contexts'] = [];
+            $mergedBooks[$key]['record_ids'] = [$book['id']];
+        } else {
+            // Merge with existing book
+            $mergedBooks[$key]['total_quantity'] += $book['quantity'];
+            $mergedBooks[$key]['record_ids'][] = $book['id'];
+        }
+        
+        // Add academic context
+        $context = [];
+        if (!empty($book['category'])) $context['category'] = $book['category'];
+        if (!empty($book['year_level'])) $context['year_level'] = $book['year_level'];
+        if (!empty($book['semester'])) $context['semester'] = $book['semester'];
+        if (!empty($book['section'])) $context['section'] = $book['section'];
+        if (!empty($book['subject_name'])) $context['subject_name'] = $book['subject_name'];
+        if (!empty($book['course_code'])) $context['course_code'] = $book['course_code'];
+        
+        // Only add if context has meaningful data
+        if (!empty($context)) {
+            $mergedBooks[$key]['academic_contexts'][] = $context;
+        }
+    }
+    
+    return array_values($mergedBooks);
+}
+
 // Get book counts for each department
 $bookCounts = [];
 foreach ($departments as $dept => $info) {
     $deptBooks = $book->getAllBooks($dept, '');
-    $bookCounts[$dept] = count($deptBooks);
+    $mergedDeptBooks = mergeBooks($deptBooks);
+    $bookCounts[$dept] = count($mergedDeptBooks);
 }
 
 // Get books if a category is selected
 $books = [];
 if ($category_filter || $search) {
-    $books = $book->getAllBooks($category_filter, $search);
+    $rawBooks = $book->getAllBooks($category_filter, $search);
+    $books = mergeBooks($rawBooks);
 }
 
 $page_title = "Library Books - ISAT U Library Miagao Campus";
@@ -117,11 +173,12 @@ include '../includes/header.php';
     margin-bottom: 1rem;
 }
 
-/* Book Card Styles */
+/* Enhanced Book Card Styles */
 .book-card {
     transition: all 0.3s ease;
     border: none;
     overflow: hidden;
+    height: 100%;
 }
 
 .book-card:hover {
@@ -132,7 +189,7 @@ include '../includes/header.php';
 .book-cover {
     position: relative;
     background: linear-gradient(145deg, #667eea 0%, #764ba2 100%);
-    height: 150px;
+    height: 180px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -158,7 +215,7 @@ include '../includes/header.php';
 }
 
 .book-spine {
-    font-size: 2rem;
+    font-size: 2.5rem;
     margin-bottom: 0.5rem;
     opacity: 0.9;
     z-index: 2;
@@ -178,15 +235,17 @@ include '../includes/header.php';
 
 .book-id {
     background: rgba(255,255,255,0.2);
-    padding: 3px 6px;
-    border-radius: 8px;
-    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
     font-weight: bold;
+    backdrop-filter: blur(10px);
 }
 
 .department-badge {
-    font-size: 0.65rem;
-    padding: 3px 6px;
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    backdrop-filter: blur(10px);
 }
 
 .quantity-badge {
@@ -194,33 +253,166 @@ include '../includes/header.php';
     bottom: 8px;
     right: 8px;
     background: rgba(255,255,255,0.2);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    z-index: 3;
+    backdrop-filter: blur(10px);
+}
+
+.copy-number-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(255,255,255,0.15);
     padding: 3px 6px;
     border-radius: 8px;
     font-size: 0.7rem;
     z-index: 3;
+    backdrop-filter: blur(10px);
 }
 
 .book-title {
     font-weight: 600;
-    line-height: 1.2;
-    height: 2.4em;
+    line-height: 1.3;
+    height: auto;
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     font-size: 1rem;
+    margin-bottom: 0.75rem;
 }
 
 .book-author, .book-isbn {
     font-size: 0.9rem;
     font-weight: 500;
+    margin-bottom: 0.5rem;
 }
 
 .book-description {
     font-size: 0.85rem;
-    line-height: 1.3;
+    line-height: 1.4;
     color: #6c757d;
     flex-grow: 1;
+    margin-bottom: 0.75rem;
+}
+
+.academic-info {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.8rem;
+}
+
+.academic-info .badge {
+    font-size: 0.65rem;
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+/* Enhanced Academic Context Styles */
+.academic-contexts {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.8rem;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.academic-contexts::-webkit-scrollbar {
+    width: 4px;
+}
+
+.academic-contexts::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 2px;
+}
+
+.academic-contexts::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 2px;
+}
+
+.context-group {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.context-group:last-child {
+    margin-bottom: 0;
+}
+
+.context-group .badge {
+    font-size: 0.65rem;
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.context-header {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.merged-indicator {
+    position: absolute;
+    top: 40px;
+    right: 8px;
+    background: rgba(220, 53, 69, 0.9);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 0.65rem;
+    z-index: 3;
+}
+
+.total-copies-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(40, 167, 69, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    z-index: 3;
+    backdrop-filter: blur(10px);
+    font-weight: bold;
+}
+
+.publication-year-badge {
+    position: absolute;
+    top: 70px;
+    right: 8px;
+    background: rgba(13, 110, 253, 0.9);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 0.65rem;
+    z-index: 3;
+    backdrop-filter: blur(10px);
+}
+
+.book-year {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.book-actions .btn-group {
+    width: 100%;
+}
+
+.book-actions .dropdown-menu {
+    width: 100%;
 }
 
 /* Different gradients for different departments */
@@ -243,11 +435,11 @@ include '../includes/header.php';
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .book-cover {
-        height: 120px;
+        height: 150px;
     }
     
     .book-spine {
-        font-size: 1.8rem;
+        font-size: 2rem;
     }
     
     .book-title {
@@ -256,6 +448,16 @@ include '../includes/header.php';
     
     .book-author, .book-isbn {
         font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .book-cover {
+        height: 130px;
+    }
+    
+    .book-spine {
+        font-size: 1.8rem;
     }
 }
 </style>
@@ -299,7 +501,7 @@ include '../includes/header.php';
     <div class="container mb-5">
         <div class="row g-4 justify-content-center">
             <?php foreach ($departments as $dept => $info): ?>
-                <div class="col-lg-3 col-md-6 col-sm-6" style="width: 600px;">
+                <div class="col-lg-3 col-md-6 col-sm-6">
                     <div class="card department-card h-100 text-center" 
                          onclick="window.location.href='?category=<?php echo $dept; ?>'">
                         <div class="card-body d-flex flex-column">
@@ -390,7 +592,7 @@ include '../includes/header.php';
                 <div class="col-md-6 mb-2">
                     <label class="form-label">Search within <?php echo $category_filter ? $departments[$category_filter]['name'] : 'all books'; ?></label>
                     <input type="text" class="form-control" name="search" 
-                           placeholder="Search by title, author, or ISBN..." 
+                           placeholder="Search by title, author, ISBN, or year..." 
                            value="<?php echo htmlspecialchars($search); ?>">
                 </div>
                 
@@ -468,16 +670,17 @@ include '../includes/header.php';
                     </a>
                 </div>
             <?php else: ?>
-                <!-- Books Grid Layout -->
+                <!-- Enhanced Books Grid Layout -->
                 <div class="row g-3">
                     <?php foreach ($books as $book_item): ?>
-                        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                            <div class="card book-card h-100 shadow-sm" data-department="<?php echo $book_item['category']; ?>">
-                                <!-- Book Cover/Icon -->
+                        <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
+                            <div class="card book-card shadow-sm" data-department="<?php echo $book_item['category']; ?>">
+                                <!-- Enhanced Book Cover -->
                                 <div class="book-cover">
                                     <div class="book-spine">
                                         <i class="fas fa-book"></i>
                                     </div>
+                                    
                                     <div class="book-info">
                                         <div class="book-id">#<?php echo $book_item['id']; ?></div>
                                         <?php if (!$category_filter): ?>
@@ -487,51 +690,184 @@ include '../includes/header.php';
                                             </span>
                                         <?php endif; ?>
                                     </div>
-                                    <div class="quantity-badge">
-                                        <i class="fas fa-copy me-1"></i><?php echo $book_item['quantity']; ?>
+                                    
+                                    <!-- Merged book indicator -->
+                                    <?php if (count($book_item['academic_contexts']) > 1): ?>
+                                        <div class="merged-indicator">
+                                            <i class="fas fa-layer-group me-1"></i><?php echo count($book_item['academic_contexts']); ?> Uses
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <!-- Publication year badge -->
+                                    <?php if (!empty($book_item['publication_year'])): ?>
+                                        <div class="publication-year-badge">
+                                            <i class="fas fa-calendar me-1"></i><?php echo $book_item['publication_year']; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <!-- Total copies badge -->
+                                    <div class="total-copies-badge">
+                                        <i class="fas fa-copy me-1"></i><?php echo $book_item['total_quantity']; ?>
                                     </div>
                                 </div>
                                 
-                                <!-- Book Details -->
+                                <!-- Enhanced Book Details -->
                                 <div class="card-body d-flex flex-column">
-                                    <h6 class="card-title book-title mb-2" title="<?php echo htmlspecialchars($book_item['title']); ?>">
+                                    <h6 class="card-title book-title" title="<?php echo htmlspecialchars($book_item['title']); ?>">
                                         <?php echo htmlspecialchars($book_item['title']); ?>
                                     </h6>
                                     
-                                    <p class="card-text book-author mb-1">
-                                        <i class="fas fa-user me-1"></i>
+                                    <p class="card-text book-author">
+                                        <i class="fas fa-user me-1 text-muted"></i>
                                         <span class="text-dark"><?php echo htmlspecialchars($book_item['author']); ?></span>
                                     </p>
                                     
                                     <?php if (!empty($book_item['isbn'])): ?>
-                                        <p class="card-text book-isbn mb-2">
-                                            <i class="fas fa-barcode me-1"></i>
+                                        <p class="card-text book-isbn">
+                                            <i class="fas fa-barcode me-1 text-muted"></i>
                                             <span class="text-muted"><?php echo htmlspecialchars($book_item['isbn']); ?></span>
                                         </p>
                                     <?php endif; ?>
                                     
+                                    <?php if (!empty($book_item['publication_year'])): ?>
+                                        <p class="card-text book-year">
+                                            <i class="fas fa-calendar-alt me-1 text-muted"></i>
+                                            <span class="text-muted">Published: <?php echo htmlspecialchars($book_item['publication_year']); ?></span>
+                                        </p>
+                                    <?php endif; ?>
+                                    
+                                    <!-- Academic Contexts - Grouped Display -->
+                                    <?php if (!empty($book_item['academic_contexts'])): ?>
+                                        <div class="academic-contexts">
+                                            <div class="context-header">
+                                                <i class="fas fa-graduation-cap me-1"></i>
+                                                Academic Uses (<?php echo count($book_item['academic_contexts']); ?>)
+                                            </div>
+                                            
+                                            <?php 
+                                            // Group contexts by department
+                                            $contextsByDept = [];
+                                            foreach ($book_item['academic_contexts'] as $context) {
+                                                $dept = $context['category'] ?? 'General';
+                                                if (!isset($contextsByDept[$dept])) {
+                                                    $contextsByDept[$dept] = [];
+                                                }
+                                                $contextsByDept[$dept][] = $context;
+                                            }
+                                            ?>
+                                            
+                                            <?php foreach ($contextsByDept as $dept => $contexts): ?>
+                                                <div class="context-group">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <strong class="text-<?php echo $departments[$dept]['color'] ?? 'primary'; ?> me-2">
+                                                            <?php echo $dept; ?>
+                                                        </strong>
+                                                        <small class="text-muted">(<?php echo count($contexts); ?> context<?php echo count($contexts) > 1 ? 's' : ''; ?>)</small>
+                                                    </div>
+                                                    
+                                                    <?php 
+                                                    // Aggregate unique values for this department
+                                                    $yearLevels = array_unique(array_filter(array_column($contexts, 'year_level')));
+                                                    $semesters = array_unique(array_filter(array_column($contexts, 'semester')));
+                                                    $sections = array_unique(array_filter(array_column($contexts, 'section')));
+                                                    $subjects = array_unique(array_filter(array_column($contexts, 'subject_name')));
+                                                    $courseCodes = array_unique(array_filter(array_column($contexts, 'course_code')));
+                                                    ?>
+                                                    
+                                                    <div>
+                                                        <?php if (!empty($yearLevels)): ?>
+                                                            <?php foreach ($yearLevels as $yearLevel): ?>
+                                                                <span class="badge bg-success"><?php echo htmlspecialchars($yearLevel); ?></span>
+                                                            <?php endforeach; ?>
+                                                        <?php endif; ?>
+                                                        
+                                                        <?php if (!empty($semesters)): ?>
+                                                            <?php foreach ($semesters as $semester): ?>
+                                                                <span class="badge bg-info"><?php echo htmlspecialchars($semester); ?></span>
+                                                            <?php endforeach; ?>
+                                                        <?php endif; ?>
+                                                        
+                                                        <?php if (!empty($sections)): ?>
+                                                            <?php foreach ($sections as $section): ?>
+                                                                <span class="badge bg-warning text-dark">Sec <?php echo htmlspecialchars($section); ?></span>
+                                                            <?php endforeach; ?>
+                                                        <?php endif; ?>
+                                                        
+                                                        <?php if (!empty($subjects)): ?>
+                                                            <?php foreach ($subjects as $subject): ?>
+                                                                <span class="badge bg-primary"><?php echo htmlspecialchars($subject); ?></span>
+                                                            <?php endforeach; ?>
+                                                        <?php endif; ?>
+                                                        
+                                                        <?php if (!empty($courseCodes)): ?>
+                                                            <?php foreach ($courseCodes as $courseCode): ?>
+                                                                <span class="badge bg-secondary"><?php echo htmlspecialchars($courseCode); ?></span>
+                                                            <?php endforeach; ?>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    
                                     <?php if (!empty($book_item['description'])): ?>
-                                        <p class="card-text book-description mb-2">
+                                        <p class="card-text book-description">
                                             <span class="text-muted">
-                                                <?php echo htmlspecialchars(substr($book_item['description'], 0, 60)); ?>
-                                                <?php if (strlen($book_item['description']) > 60): ?>...<?php endif; ?>
+                                                <?php echo htmlspecialchars(substr($book_item['description'], 0, 80)); ?>
+                                                <?php if (strlen($book_item['description']) > 80): ?>...<?php endif; ?>
                                             </span>
                                         </p>
                                     <?php endif; ?>
                                     
-                                    <!-- Action Buttons -->
-                                    <div class="mt-auto">
-                                        <div class="d-grid gap-1">
-                                            <a href="edit-book.php?id=<?php echo $book_item['id']; ?>" 
-                                               class="btn btn-outline-primary btn-sm">
-                                                <i class="fas fa-edit me-1"></i>Edit
-                                            </a>
-                                            <button type="button" 
-                                                    class="btn btn-outline-danger btn-sm" 
-                                                    onclick="confirmDelete(<?php echo $book_item['id']; ?>, '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>', deleteBook)">
-                                                <i class="fas fa-trash me-1"></i>Delete
-                                            </button>
-                                        </div>
+                                    <!-- Enhanced Action Buttons with Dropdown for Multiple Records -->
+                                    <div class="mt-auto book-actions">
+                                        <?php if (count($book_item['record_ids']) > 1): ?>
+                                            <!-- Multiple records - show dropdown -->
+                                            <div class="btn-group w-100" role="group">
+                                                <a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
+                                                   class="btn btn-outline-info btn-sm">
+                                                    <i class="fas fa-eye me-1"></i>View
+                                                </a>
+                                                <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle dropdown-toggle-split" 
+                                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <span class="visually-hidden">Toggle Dropdown</span>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li><h6 class="dropdown-header">Manage Records</h6></li>
+                                                    <?php foreach ($book_item['record_ids'] as $index => $recordId): ?>
+                                                        <li>
+                                                            <a class="dropdown-item" href="edit-book.php?id=<?php echo $recordId; ?>">
+                                                                <i class="fas fa-edit me-2"></i>Edit Record #<?php echo $recordId; ?>
+                                                            </a>
+                                                        </li>
+                                                    <?php endforeach; ?>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item text-danger" href="#" 
+                                                           onclick="confirmDeleteAll([<?php echo implode(',', $book_item['record_ids']); ?>], '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
+                                                            <i class="fas fa-trash me-2"></i>Delete All Records
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        <?php else: ?>
+                                            <!-- Single record - regular buttons -->
+                                            <div class="d-grid gap-1">
+                                                <a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
+                                                   class="btn btn-outline-info btn-sm">
+                                                    <i class="fas fa-eye me-1"></i>View Details
+                                                </a>
+                                                <a href="edit-book.php?id=<?php echo $book_item['id']; ?>" 
+                                                   class="btn btn-outline-primary btn-sm">
+                                                    <i class="fas fa-edit me-1"></i>Edit
+                                                </a>
+                                                <button type="button" 
+                                                        class="btn btn-outline-danger btn-sm" 
+                                                        onclick="confirmDelete(<?php echo $book_item['id']; ?>, '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>', deleteBook)">
+                                                    <i class="fas fa-trash me-1"></i>Delete
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -543,7 +879,59 @@ include '../includes/header.php';
     </div>
 <?php endif; ?>
 
+<!-- Enhanced Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                    Confirm Deletion
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this book?</p>
+                <div class="alert alert-warning">
+                    <strong id="bookTitle"></strong>
+                </div>
+                <small class="text-muted">This action cannot be undone.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                    <i class="fas fa-trash me-1"></i>Delete Book
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+let deleteBookId = null;
+let deleteCallback = null;
+
+function confirmDelete(id, title, callback) {
+    deleteBookId = id;
+    deleteCallback = callback;
+    document.getElementById('bookTitle').textContent = title;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+
+function confirmDeleteAll(ids, title) {
+    if (confirm(`Are you sure you want to delete all ${ids.length} records of "${title}"?\n\nThis action cannot be undone.`)) {
+        deleteMultipleBooks(ids);
+    }
+}
+
+document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+    if (deleteBookId && deleteCallback) {
+        deleteCallback(deleteBookId);
+    }
+});
+
 function deleteBook(id) {
     // Create a form and submit it
     const form = document.createElement('form');
@@ -556,7 +944,22 @@ function deleteBook(id) {
     form.submit();
 }
 
-// Add smooth scrolling for better UX
+function deleteMultipleBooks(ids) {
+    // Create a form to delete multiple books
+    const form = document.createElement('form');
+    form.method = 'POST';
+    
+    let inputs = '<input type="hidden" name="action" value="delete_multiple">';
+    ids.forEach(id => {
+        inputs += `<input type="hidden" name="ids[]" value="${id}">`;
+    });
+    
+    form.innerHTML = inputs;
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Add smooth scrolling and animations
 document.addEventListener('DOMContentLoaded', function() {
     // Add active state to selected department
     const urlParams = new URLSearchParams(window.location.search);
@@ -569,7 +972,46 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // Add stagger animation to book cards
+    const bookCards = document.querySelectorAll('.book-card');
+    bookCards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 0.1}s`;
+        card.classList.add('fade-in');
+    });
+    
+    // Initialize tooltips for academic contexts
+    const contexts = document.querySelectorAll('.academic-contexts');
+    contexts.forEach(context => {
+        if (context.scrollHeight > context.clientHeight) {
+            context.setAttribute('title', 'Scroll to see more academic contexts');
+        }
+    });
 });
+
+// Add CSS animation for fade-in effect
+const style = document.createElement('style');
+style.textContent = `
+    .fade-in {
+        animation: fadeInUp 0.6s ease forwards;
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    
+    @keyframes fadeInUp {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    /* Custom scrollbar for academic contexts */
+    .academic-contexts {
+        scrollbar-width: thin;
+        scrollbar-color: #888 #f1f1f1;
+    }
+`;
+document.head.appendChild(style);
 </script>
 
 <?php include '../includes/footer.php'; ?>

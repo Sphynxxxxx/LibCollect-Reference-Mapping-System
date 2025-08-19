@@ -1,5 +1,4 @@
 <?php
-// This file handles the printable report generation matching exact ISAT U format
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -325,7 +324,6 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
     </style>
 </head>
 <body>
-    <!-- Print Controls (visible only on screen) -->
     <div class="no-print">
         <div class="print-controls">
             <button onclick="window.print()">

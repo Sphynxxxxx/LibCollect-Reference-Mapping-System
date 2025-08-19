@@ -1,5 +1,27 @@
 <?php
-$page_title = "Dashboard - ISAT U Library Miagao Campus";
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['username'])) {
+    // User is not logged in, redirect to login page
+    header("Location: auth/login.php");
+    exit();
+}
+
+// Optional: Check for session timeout
+$session_timeout = 30 * 60; // 30 minutes in seconds
+if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $session_timeout) {
+    // Session has expired
+    $username = $_SESSION['username'] ?? 'User';
+    session_destroy();
+    header("Location: auth/login.php?message=session_expired&user=" . urlencode($username));
+    exit();
+}
+// Update last activity time
+$_SESSION['last_activity'] = time();
+
+$page_title = "Dashboard - LibCollect: Reference Mapping System";
 include 'includes/header.php';
 include 'classes/Book.php';
 
@@ -55,6 +77,12 @@ function getActivityIcon($action) {
         <div class="col">
             <h1 class="h2 mb-2">Dashboard</h1>
             <p class="mb-0">Overview of ISAT U Library System</p>
+            <!-- Welcome message for logged-in user -->
+            <?php if (isset($_SESSION['full_name'])): ?>
+                <!--<small class="text-muted">Welcome back, <?php echo htmlspecialchars($_SESSION['full_name']); ?>!</small>-->
+            <?php elseif (isset($_SESSION['username'])): ?>
+                <small class="text-muted">Welcome back, <?php echo htmlspecialchars($_SESSION['username']); ?>!</small>
+            <?php endif; ?>
         </div>
         <div class="col-auto">
             <i class="fas fa-chart-line fa-3x opacity-50"></i>

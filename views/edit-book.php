@@ -48,7 +48,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-// Now set page title and include header
 $page_title = "Edit Book - ISAT U Library Miagao Campus";
 include '../includes/header.php';
 ?>
@@ -310,7 +309,6 @@ document.getElementById('editBookForm').addEventListener('submit', function(e) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Updating Book...';
     submitBtn.disabled = true;
     
-    // Re-enable button after 3 seconds if form doesn't submit (fallback)
     setTimeout(() => {
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
@@ -352,7 +350,7 @@ function resetForm() {
 
 // Auto-format ISBN input
 document.querySelector('input[name="isbn"]').addEventListener('input', function() {
-    let value = this.value.replace(/[^\d]/g, ''); // Remove non-digits
+    let value = this.value.replace(/[^\d]/g, ''); 
     
     if (value.length === 10) {
         // Format as ISBN-10

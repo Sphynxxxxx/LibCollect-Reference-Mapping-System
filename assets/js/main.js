@@ -21,6 +21,7 @@ function showToast(message, type = 'success') {
     toast.show();
 }
 
+
 function confirmDelete(id, title, callback) {
     document.getElementById('confirmMessage').textContent = `Are you sure you want to delete "${title}"?`;
     
@@ -32,12 +33,14 @@ function confirmDelete(id, title, callback) {
     new bootstrap.Modal(document.getElementById('confirmModal')).show();
 }
 
+
 // Responsive sidebar handling
 window.addEventListener('resize', function() {
     if (window.innerWidth > 768) {
         document.getElementById('sidebar').classList.remove('show');
     }
 });
+
 
 // Auto-hide alerts after 5 seconds
 document.addEventListener('DOMContentLoaded', function() {
@@ -49,3 +52,4 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     });
 });
+

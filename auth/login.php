@@ -1,8 +1,6 @@
 <?php
 session_start();
 
-
-
 // If $pdo is still not defined, create a direct connection
 if (!isset($pdo) || $pdo === null) {
     try {
@@ -64,6 +62,12 @@ if (isset($_GET['message']) && $_GET['message'] === 'logged_out') {
     $success = "You have been successfully logged out. See you soon, " . htmlspecialchars($user) . "!";
 }
 
+// Check for session expiration message
+if (isset($_GET['message']) && $_GET['message'] === 'session_expired') {
+    $user = $_GET['user'] ?? 'User';
+    $error = "Your session has expired for security reasons. Please login again, " . htmlspecialchars($user) . ".";
+}
+
 // Debug mode - add ?debug=1 to URL
 $debug_mode = isset($_GET['debug']) && $_GET['debug'] == '1';
 
@@ -102,12 +106,14 @@ if ($_POST) {
             }
             
             if ($user && password_verify($password, $user['password'])) {
-                // Successful login
+                // Successful login - set all required session variables
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['email'] = $user['email'];
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['full_name'] = $user['full_name'] ?? $user['username'];
+                $_SESSION['last_activity'] = time(); // Set initial activity time
+                $_SESSION['logged_in'] = true; // Additional security flag
                 
                 if ($debug_mode) {
                     $debug_info .= "Session variables set successfully<br>";
@@ -288,6 +294,11 @@ if ($debug_mode) {
             color: white;
         }
         
+        .alert-warning {
+            background: linear-gradient(45deg, #ffd43b, #fab005);
+            color: #333;
+        }
+        
         .signup-link {
             text-align: center;
             margin-top: 20px;
@@ -341,8 +352,8 @@ if ($debug_mode) {
                     <?php endif; ?>
                     
                     <?php if ($error): ?>
-                        <div class="alert alert-danger">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
+                        <div class="alert alert-<?php echo (strpos($error, 'session') !== false) ? 'warning' : 'danger'; ?>">
+                            <i class="fas fa-<?php echo (strpos($error, 'session') !== false) ? 'clock' : 'exclamation-triangle'; ?> me-2"></i>
                             <?php echo htmlspecialchars($error); ?>
                         </div>
                     <?php endif; ?>

@@ -1,5 +1,5 @@
 <?php
-$page_title = "Categories - ISAT U Library Miagao Campus";
+$page_title = "Categories - LibCollect: Reference Mapping System";
 include '../includes/header.php';
 include '../classes/Book.php';
 

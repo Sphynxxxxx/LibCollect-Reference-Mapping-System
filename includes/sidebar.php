@@ -45,6 +45,12 @@ $viewsPath = $isInViews ? '' : 'views/';
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'archives.php') ? 'active' : ''; ?>" href="<?php echo $viewsPath; ?>archives.php">
+                    <i class="fas fa-archive"></i>
+                    <span class="nav-text">Archives</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'edit-book.php') ? 'active' : ''; ?>" href="<?php echo $viewsPath; ?>edit-book.php">
                     <i class="fas fa-edit"></i>
                     <span class="nav-text">Edit Book</span>
