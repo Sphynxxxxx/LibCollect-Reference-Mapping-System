@@ -200,7 +200,7 @@ if ($debug_mode) {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(180deg, #001f75, 0%, #1e40af 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -259,7 +259,7 @@ if ($debug_mode) {
         }
         
         .btn-primary {
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
             border: none;
             border-radius: 10px;
             padding: 12px 30px;

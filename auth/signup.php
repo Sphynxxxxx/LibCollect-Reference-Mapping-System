@@ -172,7 +172,7 @@ if ($_POST) {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(180deg, #001f75, 0%, #1e40af 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -196,7 +196,7 @@ if ($_POST) {
         
         .logo-section i {
             font-size: 3rem;
-            color: #667eea;
+            color: #001f75;
             margin-bottom: 10px;
         }
         
@@ -231,7 +231,7 @@ if ($_POST) {
         }
         
         .btn-primary {
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
             border: none;
             border-radius: 10px;
             padding: 12px 30px;
@@ -268,13 +268,13 @@ if ($_POST) {
         }
         
         .login-link a {
-            color: #667eea;
+            color: #001f75;
             text-decoration: none;
             font-weight: 600;
         }
         
         .login-link a:hover {
-            color: #764ba2;
+            color: #1e40af;
         }
         
         .input-group-text {
@@ -297,7 +297,7 @@ if ($_POST) {
         
         .email-domain {
             font-size: 0.8rem;
-            color: #667eea;
+            color: #001f75;
             margin-top: 5px;
             font-weight: 500;
         }
