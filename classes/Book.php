@@ -33,7 +33,7 @@ class Book {
                 publication_year INT(4) DEFAULT NULL,
                 book_copy_number INT DEFAULT NULL,
                 total_quantity INT DEFAULT NULL,
-                is_multi_record TINYINT(1) DEFAULT 0,
+                is_multi_context TINYINT(1) DEFAULT 0,
                 same_book_series TINYINT(1) DEFAULT 0,
                 original_created_at TIMESTAMP NULL,
                 original_updated_at TIMESTAMP NULL,
@@ -58,11 +58,11 @@ class Book {
      */
     private function shouldAutoArchive($publicationYear) {
         if (!$publicationYear) {
-            return false; // Don't archive books without publication year
+            return false;
         }
         
         $currentYear = date('Y');
-        $cutoffYear = $currentYear - 10;
+        $cutoffYear = $currentYear - 5;
         
         return $publicationYear <= $cutoffYear;
     }
@@ -79,7 +79,7 @@ class Book {
             $sql = "INSERT INTO archived_books (
                 original_id, title, author, isbn, category, quantity, description, 
                 subject_name, semester, section, year_level, course_code, publication_year,
-                book_copy_number, total_quantity, is_multi_record, same_book_series,
+                book_copy_number, total_quantity, is_multi_context, same_book_series,
                 original_created_at, original_updated_at, archived_at, archive_reason, archived_by
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW(), ?, ?)";
             
@@ -100,7 +100,7 @@ class Book {
                 $bookData['publication_year'] ?? null,
                 $bookData['book_copy_number'] ?? null,
                 $bookData['total_quantity'] ?? null,
-                $bookData['is_multi_record'] ?? 0,
+                $bookData['is_multi_context'] ?? 0,
                 $bookData['same_book_series'] ?? 0,
                 'Automatic archiving - Publication year 10+ years old',
                 'System'
@@ -151,18 +151,277 @@ class Book {
         }
     }
     
-    public function getAllBooks($category = '', $search = '') {
+    // Test method for activity logging
+    public function testActivityLogging() {
+        return $this->logger->log(
+            'test',
+            'Testing activity logging system from Book class at ' . date('Y-m-d H:i:s'),
+            999,
+            'Test Book Title',
+            'BIT'
+        );
+    }
+    
+    // Method to get logger instance (useful for other classes)
+    public function getLogger() {
+        return $this->logger;
+    }
+    
+    // New utility methods for enhanced functionality
+    
+    /**
+     * Check if publication year field exists in database
+     */
+    public function checkPublicationYearColumn() {
+        try {
+            $stmt = $this->pdo->query("SHOW COLUMNS FROM books LIKE 'publication_year'");
+            return $stmt->fetch() !== false;
+        } catch (PDOException $e) {
+            error_log("Error checking publication_year column: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Add publication_year column if it doesn't exist
+     */
+    public function addPublicationYearColumn() {
+        try {
+            if (!$this->checkPublicationYearColumn()) {
+                $sql = "ALTER TABLE books ADD COLUMN publication_year INT(4) NULL AFTER course_code";
+                $this->pdo->exec($sql);
+                
+                $this->logger->logUserActivity('system', 'Added publication_year column to books table');
+                return true;
+            }
+            return true; // Column already exists
+        } catch (PDOException $e) {
+            error_log("Error adding publication_year column: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Check if enhanced book fields exist in database
+     */
+    public function checkEnhancedColumns() {
+        try {
+            $requiredColumns = [
+                'publication_year',
+                'book_copy_number', 
+                'total_quantity',
+                'is_multi_context',
+                'same_book_series'
+            ];
+            
+            $existingColumns = [];
+            foreach ($requiredColumns as $column) {
+                $stmt = $this->pdo->query("SHOW COLUMNS FROM books LIKE '$column'");
+                if ($stmt->fetch()) {
+                    $existingColumns[] = $column;
+                }
+            }
+            
+            return [
+                'required' => $requiredColumns,
+                'existing' => $existingColumns,
+                'missing' => array_diff($requiredColumns, $existingColumns),
+                'all_exist' => count($existingColumns) === count($requiredColumns)
+            ];
+        } catch (PDOException $e) {
+            error_log("Error checking enhanced columns: " . $e->getMessage());
+            return ['required' => [], 'existing' => [], 'missing' => [], 'all_exist' => false];
+        }
+    }
+    
+    /**
+     * Add all missing enhanced columns
+     */
+    public function addEnhancedColumns() {
+        try {
+            $columnCheck = $this->checkEnhancedColumns();
+            
+            if ($columnCheck['all_exist']) {
+                return true; // All columns already exist
+            }
+            
+            $alterStatements = [];
+            
+            foreach ($columnCheck['missing'] as $column) {
+                switch ($column) {
+                    case 'publication_year':
+                        $alterStatements[] = "ADD COLUMN publication_year INT(4) NULL";
+                        break;
+                    case 'book_copy_number':
+                        $alterStatements[] = "ADD COLUMN book_copy_number INT NULL";
+                        break;
+                    case 'total_quantity':
+                        $alterStatements[] = "ADD COLUMN total_quantity INT NULL";
+                        break;
+                    case 'is_multi_context':
+                        $alterStatements[] = "ADD COLUMN is_multi_context TINYINT(1) DEFAULT 0";
+                        break;
+                    case 'same_book_series':
+                        $alterStatements[] = "ADD COLUMN same_book_series TINYINT(1) DEFAULT 0";
+                        break;
+                }
+            }
+            
+            if (!empty($alterStatements)) {
+                $sql = "ALTER TABLE books " . implode(", ", $alterStatements);
+                $this->pdo->exec($sql);
+                
+                $this->logger->logUserActivity('system', 
+                    'Added enhanced columns to books table: ' . implode(', ', $columnCheck['missing']));
+            }
+            
+            return true;
+        } catch (PDOException $e) {
+            error_log("Error adding enhanced columns: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Get database schema information for books table
+     */
+    public function getTableSchema() {
+        try {
+            $stmt = $this->pdo->query("DESCRIBE books");
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Error getting table schema: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    /**
+     * Safe method to add book with fallback for missing columns
+     */
+    public function safeAddBook($data) {
+        try {
+            // Check if enhanced columns exist
+            $columnCheck = $this->checkEnhancedColumns();
+            
+            if ($columnCheck['all_exist']) {
+                // Use the full addBook method
+                return $this->addBook($data);
+            } else {
+                // Use basic addBook method for compatibility
+                return $this->basicAddBook($data);
+            }
+        } catch (PDOException $e) {
+            error_log("Error in safeAddBook: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Basic addBook method for databases without enhanced columns
+     */
+    private function basicAddBook($data) {
+        try {
+            if (empty($data['title']) || empty($data['author']) || empty($data['category'])) {
+                return false;
+            }
+            
+            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, quantity, description, subject_name, semester, section, year_level, course_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $result = $stmt->execute([
+                $data['title'],
+                $data['author'],
+                $data['isbn'] ?? '',
+                $data['category'],
+                $data['quantity'] ?? 1,
+                $data['description'] ?? '',
+                $data['subject_name'] ?? '',
+                $data['semester'] ?? '',
+                $data['section'] ?? '',
+                $data['year_level'] ?? '',
+                $data['course_code'] ?? ''
+            ]);
+            
+            if ($result) {
+                $bookId = $this->pdo->lastInsertId();
+                
+                // Log the activity
+                $bookData = [
+                    'id' => $bookId,
+                    'title' => $data['title'],
+                    'category' => $data['category']
+                ];
+                
+                $this->logger->logBookActivity(
+                    'add',
+                    $bookData,
+                    "Quantity: {$data['quantity']}, Author: {$data['author']} (Basic mode)"
+                );
+                
+                return $bookId;
+            }
+            
+            return false;
+        } catch (PDOException $e) {
+            error_log("Error in basicAddBook: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Initialize database with required enhancements
+     */
+    public function initializeEnhancements() {
+        try {
+            $this->logger->logUserActivity('system', 'Starting database enhancement initialization');
+            
+            // Add enhanced columns if they don't exist
+            $result = $this->addEnhancedColumns();
+            
+            if ($result) {
+                $this->logger->logUserActivity('system', 'Database enhancement initialization completed successfully');
+                return true;
+            } else {
+                $this->logger->logUserActivity('system', 'Database enhancement initialization failed');
+                return false;
+            }
+        } catch (Exception $e) {
+            error_log("Error in initializeEnhancements: " . $e->getMessage());
+            $this->logger->logUserActivity('system', 'Database enhancement initialization error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Enhanced search method to handle comma-separated values
+     */
+    public function getAllBooks($category = '', $search = '', $yearLevel = '', $semester = '') {
         try {
             $query = "SELECT * FROM books WHERE 1=1";
             $params = [];
             
+            // Category filtering with comma-separated support
             if ($category) {
-                $query .= " AND category = ?";
+                $query .= " AND (category = ? OR FIND_IN_SET(?, category) > 0)";
+                $params[] = $category;
                 $params[] = $category;
             }
             
+            // Year level filtering with comma-separated support
+            if ($yearLevel) {
+                $query .= " AND (year_level = ? OR FIND_IN_SET(?, year_level) > 0)";
+                $params[] = $yearLevel;
+                $params[] = $yearLevel;
+            }
+            
+            // Semester filtering with comma-separated support
+            if ($semester) {
+                $query .= " AND (semester = ? OR FIND_IN_SET(?, semester) > 0)";
+                $params[] = $semester;
+                $params[] = $semester;
+            }
+            
             if ($search) {
-                $query .= " AND (title LIKE ? OR author LIKE ? OR isbn LIKE ?)";
+                $query .= " AND (title LIKE ? OR author LIKE ? OR isbn LIKE ? OR description LIKE ?)";
+                $params[] = "%$search%";
                 $params[] = "%$search%";
                 $params[] = "%$search%";
                 $params[] = "%$search%";
@@ -178,7 +437,122 @@ class Book {
             return [];
         }
     }
-    
+
+    /**
+     * Enhanced search method for multi-context books
+     */
+    public function searchBooksAdvanced($filters = []) {
+        try {
+            $query = "SELECT * FROM books WHERE 1=1";
+            $params = [];
+            
+            // Title/Author/Description search
+            if (!empty($filters['search'])) {
+                $query .= " AND (title LIKE ? OR author LIKE ? OR description LIKE ? OR subject_name LIKE ?)";
+                $searchTerm = "%{$filters['search']}%";
+                $params[] = $searchTerm;
+                $params[] = $searchTerm;
+                $params[] = $searchTerm;
+                $params[] = $searchTerm;
+            }
+            
+            // Category filtering (handles both single and comma-separated)
+            if (!empty($filters['category'])) {
+                $query .= " AND (category = ? OR FIND_IN_SET(?, category) > 0)";
+                $params[] = $filters['category'];
+                $params[] = $filters['category'];
+            }
+            
+            // Year level filtering
+            if (!empty($filters['year_level'])) {
+                $query .= " AND (year_level = ? OR FIND_IN_SET(?, year_level) > 0)";
+                $params[] = $filters['year_level'];
+                $params[] = $filters['year_level'];
+            }
+            
+            // Semester filtering
+            if (!empty($filters['semester'])) {
+                $query .= " AND (semester = ? OR FIND_IN_SET(?, semester) > 0)";
+                $params[] = $filters['semester'];
+                $params[] = $filters['semester'];
+            }
+            
+            // Section filtering
+            if (!empty($filters['section'])) {
+                $query .= " AND (section = ? OR FIND_IN_SET(?, section) > 0)";
+                $params[] = $filters['section'];
+                $params[] = $filters['section'];
+            }
+            
+            // Publication year filtering
+            if (!empty($filters['publication_year_min'])) {
+                $query .= " AND publication_year >= ?";
+                $params[] = $filters['publication_year_min'];
+            }
+            
+            if (!empty($filters['publication_year_max'])) {
+                $query .= " AND publication_year <= ?";
+                $params[] = $filters['publication_year_max'];
+            }
+            
+            // Availability filtering
+            if (!empty($filters['available_only']) && $filters['available_only'] === 'true') {
+                $query .= " AND quantity > 0";
+            }
+            
+            // Multi-context filtering
+            if (!empty($filters['multi_context_only']) && $filters['multi_context_only'] === 'true') {
+                $query .= " AND is_multi_context = 1";
+            }
+            
+            $query .= " ORDER BY title ASC";
+            
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Error in searchBooksAdvanced: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get books by specific academic context
+     */
+    public function getBooksByAcademicContext($category, $yearLevel = '', $semester = '', $section = '') {
+        try {
+            $query = "SELECT * FROM books WHERE (category = ? OR FIND_IN_SET(?, category) > 0)";
+            $params = [$category, $category];
+            
+            if ($yearLevel) {
+                $query .= " AND (year_level = ? OR FIND_IN_SET(?, year_level) > 0)";
+                $params[] = $yearLevel;
+                $params[] = $yearLevel;
+            }
+            
+            if ($semester) {
+                $query .= " AND (semester = ? OR FIND_IN_SET(?, semester) > 0)";
+                $params[] = $semester;
+                $params[] = $semester;
+            }
+            
+            if ($section) {
+                $query .= " AND (section = ? OR FIND_IN_SET(?, section) > 0)";
+                $params[] = $section;
+                $params[] = $section;
+            }
+            
+            $query .= " ORDER BY title ASC";
+            
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Error in getBooksByAcademicContext: " . $e->getMessage());
+            return [];
+        }
+    }
+
     public function getBookById($id) {
         try {
             $stmt = $this->pdo->prepare("SELECT * FROM books WHERE id = ?");
@@ -191,7 +565,7 @@ class Book {
     }
     
     /**
-     * Enhanced addBook method with automatic archiving
+     * Enhanced addBook method with automatic archiving and multi-context support
      */
     public function addBook($data) {
         try {
@@ -202,17 +576,51 @@ class Book {
             // Check if this book should be auto-archived
             $shouldArchive = $this->shouldAutoArchive($data['publication_year'] ?? null);
             
+            // Check if this is a multi-context book
+            $categories = is_array($data['category']) ? $data['category'] : explode(',', $data['category']);
+            $yearLevels = is_array($data['year_level']) ? $data['year_level'] : explode(',', $data['year_level'] ?? '');
+            $semesters = is_array($data['semester']) ? $data['semester'] : explode(',', $data['semester'] ?? '');
+            $sections = is_array($data['section']) ? $data['section'] : explode(',', $data['section'] ?? '');
+            
+            $isMultiContext = (count($categories) > 1 || count($yearLevels) > 1 || count($semesters) > 1 || count($sections) > 1) ? 1 : 0;
+            
+            // Convert arrays to comma-separated strings
+            $categoryStr = is_array($data['category']) ? implode(',', $data['category']) : $data['category'];
+            $yearLevelStr = is_array($data['year_level']) ? implode(',', $data['year_level']) : ($data['year_level'] ?? '');
+            $semesterStr = is_array($data['semester']) ? implode(',', $data['semester']) : ($data['semester'] ?? '');
+            $sectionStr = is_array($data['section']) ? implode(',', $data['section']) : ($data['section'] ?? '');
+            
+            // Prepare data with multi-context support
+            $bookData = [
+                'title' => $data['title'],
+                'author' => $data['author'],
+                'isbn' => $data['isbn'] ?? '',
+                'category' => $categoryStr,
+                'quantity' => $data['quantity'] ?? 1,
+                'description' => $data['description'] ?? '',
+                'subject_name' => $data['subject_name'] ?? '',
+                'semester' => $semesterStr,
+                'section' => $sectionStr,
+                'year_level' => $yearLevelStr,
+                'course_code' => $data['course_code'] ?? '',
+                'publication_year' => $data['publication_year'] ?? null,
+                'book_copy_number' => $data['book_copy_number'] ?? null,
+                'total_quantity' => $data['total_quantity'] ?? null,
+                'is_multi_context' => $isMultiContext,
+                'same_book_series' => $data['same_book_series'] ?? 0
+            ];
+            
             if ($shouldArchive) {
                 // Create archive table if needed
                 $this->createArchivedBooksTable();
                 
                 // Add directly to archive instead of main table
-                $result = $this->autoArchiveBook($data, 0); // 0 as placeholder for original_id
+                $result = $this->autoArchiveBook($bookData, 0); // 0 as placeholder for original_id
                 
                 if ($result) {
                     $this->logger->logBookActivity(
                         'add_archived',
-                        ['title' => $data['title'], 'category' => $data['category']],
+                        ['title' => $data['title'], 'category' => $categoryStr],
                         "Book added directly to archive - Publication year: " . ($data['publication_year'] ?? 'unknown')
                     );
                     
@@ -223,38 +631,41 @@ class Book {
             }
             
             // Normal book addition (not old enough for archive)
-            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, quantity, description, subject_name, semester, section, year_level, course_code, publication_year, book_copy_number, total_quantity, is_multi_record, same_book_series) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, quantity, description, subject_name, semester, section, year_level, course_code, publication_year, book_copy_number, total_quantity, is_multi_context, same_book_series) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $result = $stmt->execute([
-                $data['title'],
-                $data['author'],
-                $data['isbn'] ?? '',
-                $data['category'],
-                $data['quantity'] ?? 1,
-                $data['description'] ?? '',
-                $data['subject_name'] ?? '',
-                $data['semester'] ?? '',
-                $data['section'] ?? '',
-                $data['year_level'] ?? '',
-                $data['course_code'] ?? '',
-                $data['publication_year'] ?? null,
-                $data['book_copy_number'] ?? null,
-                $data['total_quantity'] ?? null,
-                $data['is_multi_record'] ?? 0,
-                $data['same_book_series'] ?? 0
+                $bookData['title'],
+                $bookData['author'],
+                $bookData['isbn'],
+                $bookData['category'],
+                $bookData['quantity'],
+                $bookData['description'],
+                $bookData['subject_name'],
+                $bookData['semester'],
+                $bookData['section'],
+                $bookData['year_level'],
+                $bookData['course_code'],
+                $bookData['publication_year'],
+                $bookData['book_copy_number'],
+                $bookData['total_quantity'],
+                $bookData['is_multi_context'],
+                $bookData['same_book_series']
             ]);
             
             if ($result) {
                 $bookId = $this->pdo->lastInsertId();
                 
                 // Log the activity
-                $additionalInfo = "Quantity: {$data['quantity']}, Author: {$data['author']}";
-                if (!empty($data['publication_year'])) {
-                    $additionalInfo .= ", Published: {$data['publication_year']}";
+                $additionalInfo = "Quantity: {$bookData['quantity']}, Author: {$bookData['author']}";
+                if (!empty($bookData['publication_year'])) {
+                    $additionalInfo .= ", Published: {$bookData['publication_year']}";
+                }
+                if ($isMultiContext) {
+                    $additionalInfo .= " (Multi-context)";
                 }
                 
                 $this->logger->logBookActivity(
                     'add',
-                    ['id' => $bookId, 'title' => $data['title'], 'category' => $data['category']],
+                    ['id' => $bookId, 'title' => $bookData['title'], 'category' => $bookData['category']],
                     $additionalInfo
                 );
                 
@@ -267,7 +678,10 @@ class Book {
             return false;
         }
     }
-    
+
+    /**
+     * Update the existing updateBook method to handle is_multi_context field
+     */
     public function updateBook($id, $data) {
         try {
             if (empty($data['title']) || empty($data['author']) || empty($data['category'])) {
@@ -277,24 +691,38 @@ class Book {
             // Get old book details for comparison
             $oldBook = $this->getBookById($id);
             
-            // Updated SQL to include publication_year and additional fields
-            $stmt = $this->pdo->prepare("UPDATE books SET title=?, author=?, isbn=?, category=?, quantity=?, description=?, subject_name=?, semester=?, section=?, year_level=?, course_code=?, publication_year=?, book_copy_number=?, total_quantity=?, is_multi_record=?, same_book_series=? WHERE id=?");
+            // Check if this is a multi-context book
+            $categories = is_array($data['category']) ? $data['category'] : explode(',', $data['category']);
+            $yearLevels = is_array($data['year_level']) ? $data['year_level'] : explode(',', $data['year_level'] ?? '');
+            $semesters = is_array($data['semester']) ? $data['semester'] : explode(',', $data['semester'] ?? '');
+            $sections = is_array($data['section']) ? $data['section'] : explode(',', $data['section'] ?? '');
+            
+            $isMultiContext = (count($categories) > 1 || count($yearLevels) > 1 || count($semesters) > 1 || count($sections) > 1) ? 1 : 0;
+            
+            // Convert arrays to comma-separated strings
+            $categoryStr = is_array($data['category']) ? implode(',', $data['category']) : $data['category'];
+            $yearLevelStr = is_array($data['year_level']) ? implode(',', $data['year_level']) : ($data['year_level'] ?? '');
+            $semesterStr = is_array($data['semester']) ? implode(',', $data['semester']) : ($data['semester'] ?? '');
+            $sectionStr = is_array($data['section']) ? implode(',', $data['section']) : ($data['section'] ?? '');
+            
+            // Updated SQL to include is_multi_context
+            $stmt = $this->pdo->prepare("UPDATE books SET title=?, author=?, isbn=?, category=?, quantity=?, description=?, subject_name=?, semester=?, section=?, year_level=?, course_code=?, publication_year=?, book_copy_number=?, total_quantity=?, is_multi_context=?, same_book_series=? WHERE id=?");
             $result = $stmt->execute([
                 $data['title'],
                 $data['author'],
                 $data['isbn'] ?? '',
-                $data['category'],
+                $categoryStr,
                 $data['quantity'] ?? 1,
                 $data['description'] ?? '',
                 $data['subject_name'] ?? '',
-                $data['semester'] ?? '',
-                $data['section'] ?? '',
-                $data['year_level'] ?? '',
+                $semesterStr,
+                $sectionStr,
+                $yearLevelStr,
                 $data['course_code'] ?? '',
                 $data['publication_year'] ?? null,
                 $data['book_copy_number'] ?? null,
                 $data['total_quantity'] ?? null,
-                $data['is_multi_record'] ?? 0,
+                $isMultiContext,
                 $data['same_book_series'] ?? 0,
                 $id
             ]);
@@ -310,8 +738,8 @@ class Book {
                     if ($oldBook['author'] !== $data['author']) {
                         $changes[] = "author changed from '{$oldBook['author']}' to '{$data['author']}'";
                     }
-                    if ($oldBook['category'] !== $data['category']) {
-                        $changes[] = "category changed from '{$oldBook['category']}' to '{$data['category']}'";
+                    if ($oldBook['category'] !== $categoryStr) {
+                        $changes[] = "category changed from '{$oldBook['category']}' to '{$categoryStr}'";
                     }
                     if ($oldBook['quantity'] != ($data['quantity'] ?? 1)) {
                         $changes[] = "quantity changed from {$oldBook['quantity']} to " . ($data['quantity'] ?? 1);
@@ -327,7 +755,7 @@ class Book {
                     $bookData = [
                         'id' => $id,
                         'title' => $data['title'],
-                        'category' => $data['category']
+                        'category' => $categoryStr
                     ];
                     
                     $this->logger->logBookActivity('update', $bookData, $additionalInfo);
@@ -364,7 +792,10 @@ class Book {
             return false;
         }
     }
-    
+
+    /**
+     * Enhanced book statistics with multi-context support
+     */
     public function getBookStats() {
         try {
             $stats = [];
@@ -377,9 +808,54 @@ class Book {
             $stmt = $this->pdo->query("SELECT SUM(quantity) as total FROM books");
             $stats['total_copies'] = $stmt->fetch()['total'] ?? 0;
             
-            // Books by category
-            $stmt = $this->pdo->query("SELECT category, COUNT(*) as count FROM books GROUP BY category");
+            // Multi-context books
+            $stmt = $this->pdo->query("SELECT COUNT(*) as total FROM books WHERE is_multi_context = 1");
+            $stats['multi_context_books'] = $stmt->fetch()['total'] ?? 0;
+            
+            // Books by primary category (first category in comma-separated list)
+            $stmt = $this->pdo->query("
+                SELECT 
+                    SUBSTRING_INDEX(category, ',', 1) as primary_category,
+                    COUNT(*) as count 
+                FROM books 
+                GROUP BY primary_category
+                ORDER BY count DESC
+            ");
             $stats['by_category'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // All category associations (including multi-context)
+            $stmt = $this->pdo->query("
+                SELECT 
+                    'BIT' as category,
+                    COUNT(*) as count 
+                FROM books 
+                WHERE FIND_IN_SET('BIT', category) > 0
+                
+                UNION ALL
+                
+                SELECT 
+                    'EDUCATION' as category,
+                    COUNT(*) as count 
+                FROM books 
+                WHERE FIND_IN_SET('EDUCATION', category) > 0
+                
+                UNION ALL
+                
+                SELECT 
+                    'HBM' as category,
+                    COUNT(*) as count 
+                FROM books 
+                WHERE FIND_IN_SET('HBM', category) > 0
+                
+                UNION ALL
+                
+                SELECT 
+                    'COMPSTUD' as category,
+                    COUNT(*) as count 
+                FROM books 
+                WHERE FIND_IN_SET('COMPSTUD', category) > 0
+            ");
+            $stats['by_category_expanded'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             // Books by publication year (recent years)
             $stmt = $this->pdo->query("SELECT publication_year, COUNT(*) as count FROM books WHERE publication_year IS NOT NULL AND publication_year >= YEAR(NOW()) - 10 GROUP BY publication_year ORDER BY publication_year DESC");
@@ -401,9 +877,231 @@ class Book {
                 'total_copies' => 0,
                 'borrowed_books' => 0,
                 'available_copies' => 0,
+                'multi_context_books' => 0,
                 'by_category' => [],
+                'by_category_expanded' => [],
                 'by_year' => []
             ];
+        }
+    }
+
+    /**
+     * Get detailed report data with multi-context display
+     */
+    public function getDetailedReportData($department = 'all', $sortBy = 'title') {
+        try {
+            $query = "SELECT *, DATE_FORMAT(created_at, '%Y') as copyright_year FROM books";
+            $params = [];
+            
+            if ($department && $department !== 'all') {
+                $query .= " WHERE (category = ? OR FIND_IN_SET(?, category) > 0)";
+                $params[] = $department;
+                $params[] = $department;
+            }
+            
+            // Add sorting
+            switch ($sortBy) {
+                case 'author':
+                    $query .= " ORDER BY author ASC, title ASC";
+                    break;
+                case 'category':
+                    $query .= " ORDER BY category ASC, title ASC";
+                    break;
+                case 'date':
+                    $query .= " ORDER BY created_at DESC, title ASC";
+                    break;
+                case 'year':
+                    $query .= " ORDER BY publication_year DESC, title ASC";
+                    break;
+                case 'contexts':
+                    $query .= " ORDER BY is_multi_context DESC, title ASC";
+                    break;
+                default:
+                    $query .= " ORDER BY title ASC";
+            }
+            
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Process results to show readable multi-context information
+            foreach ($results as &$book) {
+                $book['categories_display'] = str_replace(',', ', ', $book['category']);
+                $book['year_levels_display'] = $book['year_level'] ? str_replace(',', ', ', $book['year_level']) : 'All';
+                $book['semesters_display'] = $book['semester'] ? str_replace(',', ', ', $book['semester']) : 'All';
+                $book['sections_display'] = $book['section'] ? str_replace(',', ', ', $book['section']) : 'All';
+                $book['is_multi_context_display'] = $book['is_multi_context'] ? 'Yes' : 'No';
+            }
+            
+            return $results;
+        } catch (PDOException $e) {
+            error_log("Error in getDetailedReportData: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Enhanced CSV export with multi-context information
+     */
+    public function exportToCSV($department = 'all') {
+        try {
+            $books = $this->getDetailedReportData($department);
+            
+            $headers = [
+                'ID', 'Title', 'Author', 'ISBN', 'Categories', 
+                'Quantity', 'Publication Year', 'Subject Name', 'Course Code',
+                'Year Levels', 'Semesters', 'Sections', 'Multi-Context', 
+                'Description', 'Date Added', 'Last Updated'
+            ];
+            
+            $csvData = [];
+            $csvData[] = $headers;
+            
+            foreach ($books as $book) {
+                $csvData[] = [
+                    $book['id'],
+                    $book['title'],
+                    $book['author'],
+                    $book['isbn'],
+                    $book['categories_display'],
+                    $book['quantity'],
+                    $book['publication_year'] ?? '',
+                    $book['subject_name'] ?? '',
+                    $book['course_code'] ?? '',
+                    $book['year_levels_display'],
+                    $book['semesters_display'],
+                    $book['sections_display'],
+                    $book['is_multi_context_display'],
+                    $book['description'],
+                    $book['created_at'],
+                    $book['updated_at']
+                ];
+            }
+            
+            // Log export activity
+            $departmentText = ($department === 'all') ? 'all departments' : $department . ' department';
+            $this->logger->logUserActivity(
+                'export',
+                "Exported books data in CSV format (" . count($books) . " books from " . $departmentText . ") with multi-context support"
+            );
+            
+            return $csvData;
+        } catch (PDOException $e) {
+            error_log("Error in exportToCSV: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Utility method to parse comma-separated fields back to arrays
+     */
+    public function parseBookContexts($book) {
+        return [
+            'categories' => $book['category'] ? explode(',', $book['category']) : [],
+            'year_levels' => $book['year_level'] ? explode(',', $book['year_level']) : [],
+            'semesters' => $book['semester'] ? explode(',', $book['semester']) : [],
+            'sections' => $book['section'] ? explode(',', $book['section']) : []
+        ];
+    }
+
+    /**
+     * Check if a book is available for a specific academic context
+     */
+    public function isBookAvailableForContext($bookId, $category, $yearLevel = '', $semester = '', $section = '') {
+        try {
+            $book = $this->getBookById($bookId);
+            if (!$book || $book['quantity'] <= 0) {
+                return false;
+            }
+            
+            // Check category
+            $categories = explode(',', $book['category']);
+            if (!in_array($category, $categories)) {
+                return false;
+            }
+            
+            // Check year level if specified
+            if ($yearLevel && $book['year_level']) {
+                $yearLevels = explode(',', $book['year_level']);
+                if (!in_array($yearLevel, $yearLevels)) {
+                    return false;
+                }
+            }
+            
+            // Check semester if specified
+            if ($semester && $book['semester']) {
+                $semesters = explode(',', $book['semester']);
+                if (!in_array($semester, $semesters)) {
+                    return false;
+                }
+            }
+            
+            // Check section if specified
+            if ($section && $book['section']) {
+                $sections = explode(',', $book['section']);
+                if (!in_array($section, $sections)) {
+                    return false;
+                }
+            }
+            
+            return true;
+        } catch (PDOException $e) {
+            error_log("Error in isBookAvailableForContext: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get books that need database field updates (migrate old single-context books)
+     */
+    public function getBooksNeedingContextUpdate() {
+        try {
+            // Find books that don't have the is_multi_context field set properly
+            $stmt = $this->pdo->query("
+                SELECT * FROM books 
+                WHERE is_multi_context IS NULL 
+                OR is_multi_context = 0 AND (
+                    category LIKE '%,%' 
+                    OR year_level LIKE '%,%' 
+                    OR semester LIKE '%,%' 
+                    OR section LIKE '%,%'
+                )
+            ");
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Error in getBooksNeedingContextUpdate: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Update is_multi_context field for existing books
+     */
+    public function updateMultiContextFlags() {
+        try {
+            $stmt = $this->pdo->prepare("
+                UPDATE books 
+                SET is_multi_context = CASE 
+                    WHEN category LIKE '%,%' 
+                        OR year_level LIKE '%,%' 
+                        OR semester LIKE '%,%' 
+                        OR section LIKE '%,%' 
+                    THEN 1 
+                    ELSE 0 
+                END
+            ");
+            
+            $result = $stmt->execute();
+            $updatedCount = $stmt->rowCount();
+            
+            if ($result) {
+                $this->logger->logUserActivity('system', "Updated is_multi_context flags for {$updatedCount} books");
+            }
+            
+            return $updatedCount;
+        } catch (PDOException $e) {
+            error_log("Error in updateMultiContextFlags: " . $e->getMessage());
+            return false;
         }
     }
     
@@ -478,44 +1176,6 @@ class Book {
             $this->pdo->rollBack();
             error_log("Book return failed: " . $e->getMessage());
             return false;
-        }
-    }
-    
-    // Enhanced report methods
-    public function getDetailedReportData($department = 'all', $sortBy = 'title') {
-        try {
-            $query = "SELECT *, DATE_FORMAT(created_at, '%Y') as copyright_year FROM books";
-            $params = [];
-            
-            if ($department && $department !== 'all') {
-                $query .= " WHERE category = ?";
-                $params[] = $department;
-            }
-            
-            // Add sorting
-            switch ($sortBy) {
-                case 'author':
-                    $query .= " ORDER BY author ASC, title ASC";
-                    break;
-                case 'category':
-                    $query .= " ORDER BY category ASC, title ASC";
-                    break;
-                case 'date':
-                    $query .= " ORDER BY created_at DESC, title ASC";
-                    break;
-                case 'year':
-                    $query .= " ORDER BY publication_year DESC, title ASC";
-                    break;
-                default:
-                    $query .= " ORDER BY title ASC";
-            }
-            
-            $stmt = $this->pdo->prepare($query);
-            $stmt->execute($params);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            error_log("Error in getDetailedReportData: " . $e->getMessage());
-            return [];
         }
     }
     
@@ -718,54 +1378,6 @@ class Book {
         }
     }
     
-    public function exportToCSV($department = 'all') {
-        try {
-            $books = $this->getDetailedReportData($department);
-            
-            $headers = [
-                'ID', 'Title', 'Author', 'ISBN', 'Category', 
-                'Quantity', 'Publication Year', 'Subject Name', 'Course Code',
-                'Year Level', 'Semester', 'Section', 'Description', 
-                'Date Added', 'Last Updated'
-            ];
-            
-            $csvData = [];
-            $csvData[] = $headers;
-            
-            foreach ($books as $book) {
-                $csvData[] = [
-                    $book['id'],
-                    $book['title'],
-                    $book['author'],
-                    $book['isbn'],
-                    $book['category'],
-                    $book['quantity'],
-                    $book['publication_year'] ?? '',
-                    $book['subject_name'] ?? '',
-                    $book['course_code'] ?? '',
-                    $book['year_level'] ?? '',
-                    $book['semester'] ?? '',
-                    $book['section'] ?? '',
-                    $book['description'],
-                    $book['created_at'],
-                    $book['updated_at']
-                ];
-            }
-            
-            // Log export activity
-            $departmentText = ($department === 'all') ? 'all departments' : $department . ' department';
-            $this->logger->logUserActivity(
-                'export',
-                "Exported books data in CSV format (" . count($books) . " books from " . $departmentText . ")"
-            );
-            
-            return $csvData;
-        } catch (PDOException $e) {
-            error_log("Error in exportToCSV: " . $e->getMessage());
-            return [];
-        }
-    }
-    
     // Bulk operations with activity logging
     public function bulkImport($books) {
         try {
@@ -952,7 +1564,8 @@ class Book {
             $stmt->execute($params);
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
-            error_log("Error in getArchivedBooks: " . $e->getMessage());
+            error_log("Error in getArchivedBooks: " . $e->
+            getMessage());
             return [];
         }
     }
@@ -999,7 +1612,7 @@ class Book {
             $sql = "INSERT INTO archived_books (
                 original_id, title, author, isbn, category, quantity, description, 
                 subject_name, semester, section, year_level, course_code, publication_year,
-                book_copy_number, total_quantity, is_multi_record, same_book_series,
+                book_copy_number, total_quantity, is_multi_context, same_book_series,
                 original_created_at, original_updated_at, archived_at, archive_reason, archived_by
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)";
             
@@ -1020,7 +1633,7 @@ class Book {
                 $book['publication_year'] ?? null,
                 $book['book_copy_number'] ?? null,
                 $book['total_quantity'] ?? null,
-                $book['is_multi_record'] ?? 0,
+                $book['is_multi_context'] ?? 0,
                 $book['same_book_series'] ?? 0,
                 $book['created_at'] ?? null,
                 $book['updated_at'] ?? null,
@@ -1078,7 +1691,7 @@ class Book {
             $sql = "INSERT INTO books (
                 title, author, isbn, category, quantity, description, 
                 subject_name, semester, section, year_level, course_code, publication_year,
-                book_copy_number, total_quantity, is_multi_record, same_book_series
+                book_copy_number, total_quantity, is_multi_context, same_book_series
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             
             $stmt = $this->pdo->prepare($sql);
@@ -1097,7 +1710,7 @@ class Book {
                 $archivedBook['publication_year'],
                 $archivedBook['book_copy_number'],
                 $archivedBook['total_quantity'],
-                $archivedBook['is_multi_record'],
+                $archivedBook['is_multi_context'],
                 $archivedBook['same_book_series']
             ]);
             
@@ -1174,273 +1787,202 @@ class Book {
         }
     }
     
-    // Debug method
+    /**
+     * Debug database method - complete implementation
+     */
     public function debugDatabase() {
         try {
+            $debug = [];
+            
+            // Check if books table exists
             $stmt = $this->pdo->query("SHOW TABLES LIKE 'books'");
             $tableExists = $stmt->fetch();
             
             if (!$tableExists) {
-                error_log("ERROR: 'books' table does not exist!");
-                return false;
+                $debug['error'] = "Books table does not exist!";
+                return $debug;
             }
             
+            // Get total book count
             $stmt = $this->pdo->query("SELECT COUNT(*) as count FROM books");
             $count = $stmt->fetch()['count'];
-            error_log("Total books in database: " . $count);
+            $debug['total_books'] = $count;
             
-            // Check if activity logging is working
+            // Get table schema
+            $debug['table_schema'] = $this->getTableSchema();
+            
+            // Check enhanced columns
+            $debug['enhanced_columns'] = $this->checkEnhancedColumns();
+            
+            // Check activity logging
             if ($this->logger) {
-                error_log("Activity logging is enabled");
+                $debug['activity_logging_enabled'] = true;
                 $recentActivities = $this->logger->getRecentActivities(5);
-                error_log("Recent activities count: " . count($recentActivities));
+                $debug['recent_activities_count'] = count($recentActivities);
+                $debug['recent_activities'] = $recentActivities;
             } else {
-                error_log("Activity logging is NOT enabled");
+                $debug['activity_logging_enabled'] = false;
             }
             
-            return true;
+            // Check archive table
+            $this->createArchivedBooksTable();
+            $stmt = $this->pdo->query("SELECT COUNT(*) as count FROM archived_books");
+            $archivedCount = $stmt->fetch()['count'];
+            $debug['archived_books'] = $archivedCount;
+            
+            // Check borrowing table
+            try {
+                $stmt = $this->pdo->query("SELECT COUNT(*) as count FROM borrowing");
+                $borrowingCount = $stmt->fetch()['count'];
+                $debug['borrowing_records'] = $borrowingCount;
+            } catch (PDOException $e) {
+                $debug['borrowing_table_error'] = $e->getMessage();
+            }
+            
+            return $debug;
+            
         } catch (PDOException $e) {
             error_log("Database debug error: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    // Test method for activity logging
-    public function testActivityLogging() {
-        return $this->logger->log(
-            'test',
-            'Testing activity logging system from Book class at ' . date('Y-m-d H:i:s'),
-            999,
-            'Test Book Title',
-            'BIT'
-        );
-    }
-    
-    // Method to get logger instance (useful for other classes)
-    public function getLogger() {
-        return $this->logger;
-    }
-    
-    // New utility methods for enhanced functionality
-    
-    /**
-     * Check if publication year field exists in database
-     */
-    public function checkPublicationYearColumn() {
-        try {
-            $stmt = $this->pdo->query("SHOW COLUMNS FROM books LIKE 'publication_year'");
-            return $stmt->fetch() !== false;
-        } catch (PDOException $e) {
-            error_log("Error checking publication_year column: " . $e->getMessage());
-            return false;
+            return ['error' => $e->getMessage()];
         }
     }
     
     /**
-     * Add publication_year column if it doesn't exist
+     * Get comprehensive system status
      */
-    public function addPublicationYearColumn() {
+    public function getSystemStatus() {
         try {
-            if (!$this->checkPublicationYearColumn()) {
-                $sql = "ALTER TABLE books ADD COLUMN publication_year INT(4) NULL AFTER course_code";
-                $this->pdo->exec($sql);
-                
-                $this->logger->logUserActivity('system', 'Added publication_year column to books table');
-                return true;
+            $status = [];
+            
+            // Database connection status
+            $status['database_connected'] = $this->pdo ? true : false;
+            
+            // Table existence checks
+            $tables = ['books', 'archived_books', 'borrowing', 'activity_log'];
+            foreach ($tables as $table) {
+                $stmt = $this->pdo->query("SHOW TABLES LIKE '{$table}'");
+                $status['tables'][$table] = $stmt->fetch() ? 'exists' : 'missing';
             }
-            return true; // Column already exists
-        } catch (PDOException $e) {
-            error_log("Error adding publication_year column: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * Check if enhanced book fields exist in database
-     */
-    public function checkEnhancedColumns() {
-        try {
-            $requiredColumns = [
-                'publication_year',
-                'book_copy_number', 
-                'total_quantity',
-                'is_multi_record',
-                'same_book_series'
+            
+            // Column checks for books table
+            $status['enhanced_features'] = $this->checkEnhancedColumns();
+            
+            // Data counts
+            $status['data_counts'] = [
+                'active_books' => 0,
+                'archived_books' => 0,
+                'borrowing_records' => 0,
+                'activity_logs' => 0
             ];
             
-            $existingColumns = [];
-            foreach ($requiredColumns as $column) {
-                $stmt = $this->pdo->query("SHOW COLUMNS FROM books LIKE '$column'");
-                if ($stmt->fetch()) {
-                    $existingColumns[] = $column;
-                }
+            try {
+                $stmt = $this->pdo->query("SELECT COUNT(*) as count FROM books");
+                $status['data_counts']['active_books'] = $stmt->fetch()['count'];
+            } catch (PDOException $e) {
+                $status['errors'][] = "Cannot count active books: " . $e->getMessage();
             }
             
-            return [
-                'required' => $requiredColumns,
-                'existing' => $existingColumns,
-                'missing' => array_diff($requiredColumns, $existingColumns),
-                'all_exist' => count($existingColumns) === count($requiredColumns)
-            ];
-        } catch (PDOException $e) {
-            error_log("Error checking enhanced columns: " . $e->getMessage());
-            return ['required' => [], 'existing' => [], 'missing' => [], 'all_exist' => false];
-        }
-    }
-    
-    /**
-     * Add all missing enhanced columns
-     */
-    public function addEnhancedColumns() {
-        try {
-            $columnCheck = $this->checkEnhancedColumns();
-            
-            if ($columnCheck['all_exist']) {
-                return true; // All columns already exist
+            try {
+                $stmt = $this->pdo->query("SELECT COUNT(*) as count FROM archived_books");
+                $status['data_counts']['archived_books'] = $stmt->fetch()['count'];
+            } catch (PDOException $e) {
+                $status['data_counts']['archived_books'] = 'N/A';
             }
             
-            $alterStatements = [];
-            
-            foreach ($columnCheck['missing'] as $column) {
-                switch ($column) {
-                    case 'publication_year':
-                        $alterStatements[] = "ADD COLUMN publication_year INT(4) NULL";
-                        break;
-                    case 'book_copy_number':
-                        $alterStatements[] = "ADD COLUMN book_copy_number INT NULL";
-                        break;
-                    case 'total_quantity':
-                        $alterStatements[] = "ADD COLUMN total_quantity INT NULL";
-                        break;
-                    case 'is_multi_record':
-                        $alterStatements[] = "ADD COLUMN is_multi_record TINYINT(1) DEFAULT 0";
-                        break;
-                    case 'same_book_series':
-                        $alterStatements[] = "ADD COLUMN same_book_series TINYINT(1) DEFAULT 0";
-                        break;
-                }
+            try {
+                $stmt = $this->pdo->query("SELECT COUNT(*) as count FROM borrowing");
+                $status['data_counts']['borrowing_records'] = $stmt->fetch()['count'];
+            } catch (PDOException $e) {
+                $status['data_counts']['borrowing_records'] = 'N/A';
             }
             
-            if (!empty($alterStatements)) {
-                $sql = "ALTER TABLE books " . implode(", ", $alterStatements);
-                $this->pdo->exec($sql);
-                
-                $this->logger->logUserActivity('system', 
-                    'Added enhanced columns to books table: ' . implode(', ', $columnCheck['missing']));
+            try {
+                $stmt = $this->pdo->query("SELECT COUNT(*) as count FROM activity_log");
+                $status['data_counts']['activity_logs'] = $stmt->fetch()['count'];
+            } catch (PDOException $e) {
+                $status['data_counts']['activity_logs'] = 'N/A';
             }
             
-            return true;
-        } catch (PDOException $e) {
-            error_log("Error adding enhanced columns: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * Get database schema information for books table
-     */
-    public function getTableSchema() {
-        try {
-            $stmt = $this->pdo->query("DESCRIBE books");
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            error_log("Error getting table schema: " . $e->getMessage());
-            return [];
-        }
-    }
-    
-    /**
-     * Safe method to add book with fallback for missing columns
-     */
-    public function safeAddBook($data) {
-        try {
-            // Check if enhanced columns exist
-            $columnCheck = $this->checkEnhancedColumns();
+            // Activity logger status
+            $status['activity_logger'] = $this->logger ? 'initialized' : 'not_initialized';
             
-            if ($columnCheck['all_exist']) {
-                // Use the full addBook method
-                return $this->addBook($data);
-            } else {
-                // Use basic addBook method for compatibility
-                return $this->basicAddBook($data);
-            }
-        } catch (PDOException $e) {
-            error_log("Error in safeAddBook: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * Basic addBook method for databases without enhanced columns
-     */
-    private function basicAddBook($data) {
-        try {
-            if (empty($data['title']) || empty($data['author']) || empty($data['category'])) {
-                return false;
-            }
+            // Archive statistics
+            $status['archive_stats'] = $this->getArchiveStats();
             
-            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, quantity, description, subject_name, semester, section, year_level, course_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $result = $stmt->execute([
-                $data['title'],
-                $data['author'],
-                $data['isbn'] ?? '',
-                $data['category'],
-                $data['quantity'] ?? 1,
-                $data['description'] ?? '',
-                $data['subject_name'] ?? '',
-                $data['semester'] ?? '',
-                $data['section'] ?? '',
-                $data['year_level'] ?? '',
-                $data['course_code'] ?? ''
-            ]);
+            return $status;
             
-            if ($result) {
-                $bookId = $this->pdo->lastInsertId();
-                
-                // Log the activity
-                $bookData = [
-                    'id' => $bookId,
-                    'title' => $data['title'],
-                    'category' => $data['category']
-                ];
-                
-                $this->logger->logBookActivity(
-                    'add',
-                    $bookData,
-                    "Quantity: {$data['quantity']}, Author: {$data['author']} (Basic mode)"
-                );
-                
-                return $bookId;
-            }
-            
-            return false;
-        } catch (PDOException $e) {
-            error_log("Error in basicAddBook: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * Initialize database with required enhancements
-     */
-    public function initializeEnhancements() {
-        try {
-            $this->logger->logUserActivity('system', 'Starting database enhancement initialization');
-            
-            // Add enhanced columns if they don't exist
-            $result = $this->addEnhancedColumns();
-            
-            if ($result) {
-                $this->logger->logUserActivity('system', 'Database enhancement initialization completed successfully');
-                return true;
-            } else {
-                $this->logger->logUserActivity('system', 'Database enhancement initialization failed');
-                return false;
-            }
         } catch (Exception $e) {
-            error_log("Error in initializeEnhancements: " . $e->getMessage());
-            $this->logger->logUserActivity('system', 'Database enhancement initialization error: ' . $e->getMessage());
-            return false;
+            error_log("Error in getSystemStatus: " . $e->getMessage());
+            return ['error' => $e->getMessage()];
+        }
+    }
+    
+    /**
+     * Initialize all required database enhancements and tables
+     */
+    public function initializeCompleteSystem() {
+        try {
+            $results = [];
+            
+            // Initialize enhanced columns
+            $results['enhanced_columns'] = $this->addEnhancedColumns();
+            
+            // Create archived books table
+            $results['archive_table'] = $this->createArchivedBooksTable();
+            
+            // Update multi-context flags for existing books
+            $updatedCount = $this->updateMultiContextFlags();
+            $results['multi_context_update'] = $updatedCount !== false ? $updatedCount : 'failed';
+            
+            // Log system initialization
+            $this->logger->logUserActivity('system', 'Complete system initialization performed');
+            
+            $results['success'] = true;
+            return $results;
+            
+        } catch (Exception $e) {
+            error_log("Error in initializeCompleteSystem: " . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    
+    /**
+     * Get book availability summary
+     */
+    public function getAvailabilitySummary() {
+        try {
+            $summary = [];
+            
+            // Total books and copies
+            $stmt = $this->pdo->query("SELECT COUNT(*) as titles, SUM(quantity) as copies FROM books");
+            $totals = $stmt->fetch(PDO::FETCH_ASSOC);
+            $summary['total_titles'] = $totals['titles'];
+            $summary['total_copies'] = $totals['copies'];
+            
+            // Available vs borrowed
+            try {
+                $stmt = $this->pdo->query("SELECT COUNT(*) as borrowed FROM borrowing WHERE status IN ('borrowed', 'overdue')");
+                $borrowed = $stmt->fetch()['borrowed'];
+                $summary['borrowed_copies'] = $borrowed;
+                $summary['available_copies'] = $summary['total_copies'] - $borrowed;
+            } catch (PDOException $e) {
+                $summary['borrowed_copies'] = 'N/A';
+                $summary['available_copies'] = $summary['total_copies'];
+            }
+            
+            // Low stock books
+            $lowStockBooks = $this->getLowStockBooks(3);
+            $summary['low_stock_count'] = count($lowStockBooks);
+            
+            // Out of stock books
+            $stmt = $this->pdo->query("SELECT COUNT(*) as count FROM books WHERE quantity = 0");
+            $summary['out_of_stock_count'] = $stmt->fetch()['count'];
+            
+            return $summary;
+            
+        } catch (PDOException $e) {
+            error_log("Error in getAvailabilitySummary: " . $e->getMessage());
+            return [];
         }
     }
 }

@@ -1,5 +1,4 @@
 <?php
-// Determine if we're in the root directory or views directory
 $currentDir = dirname($_SERVER['SCRIPT_FILENAME']);
 $isInViews = (basename($currentDir) === 'views');
 
@@ -13,7 +12,7 @@ $viewsPath = $isInViews ? '' : 'views/';
     <div class="sidebar-header">
         <a href="<?php echo $basePath; ?>index.php" class="sidebar-brand">
             <div class="d-flex align-items-center justify-content-center">
-                <i class="fas fa-university fa-2x mb-2"></i>
+                <img src="<?php echo $basePath; ?>assets/images/ISATU Logo.png" alt="ISAT U Logo" class="sidebar-logo">
             </div>
             <div class="sidebar-text">ISAT U Library</div>
         </a>

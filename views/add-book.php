@@ -35,21 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
-    // If no multiple selections, create single entry
-    if (empty($categories)) $categories = [''];
-    if (empty($year_levels)) $year_levels = [''];
-    if (empty($semesters)) $semesters = [''];
-    if (empty($sections)) $sections = [''];
-    
-    // Calculate total combinations
-    $total_combinations = count($categories) * count($year_levels) * count($semesters) * count($sections);
-    
     // Determine how to handle the books
     $same_book = isset($_POST['same_book']) && $_POST['same_book'] === 'true';
     $unique_isbns = array_unique(array_filter($isbn_data));
     $unique_book_count = count($unique_isbns);
     
-    // Create book records
+    // Create book records - ONE record per physical book copy
     for ($i = 0; $i < $total_quantity; $i++) {
         // Determine ISBN for this book copy
         $current_isbn = '';
@@ -62,43 +53,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $current_isbn = $isbn_data[$isbn_index];
         }
         
-        // Create combinations for each selected option for this book copy
-        foreach ($categories as $category) {
-            foreach ($year_levels as $year_level) {
-                foreach ($semesters as $semester) {
-                    foreach ($sections as $section) {
-                        $data = [
-                            'title' => $_POST['title'],
-                            'author' => $_POST['author'],
-                            'isbn' => $current_isbn,
-                            'category' => $category,
-                            'quantity' => 1, // Each record represents 1 physical book
-                            'description' => $_POST['description'],
-                            'subject_name' => $_POST['subject_name'] ?? '',
-                            'semester' => $semester,
-                            'section' => $section,
-                            'year_level' => $year_level,
-                            'course_code' => $_POST['course_code'] ?? '',
-                            'publication_year' => $_POST['publication_year'] ?? null, // Add publication year
-                            'book_copy_number' => $i + 1, // Track which copy this is
-                            'total_quantity' => $total_quantity, // Reference to total
-                            'is_multi_record' => ($total_combinations > 1) ? 1 : 0,
-                            'same_book_series' => $same_book ? 1 : 0
-                        ];
-                        
-                        $result = $book->addBook($data);
-                        
-                        // Handle different return values from addBook
-                        if ($result === 'archived') {
-                            $archived_count++;
-                        } elseif ($result) {
-                            $success_count++;
-                        } else {
-                            $error_count++;
-                        }
-                    }
-                }
-            }
+        // Convert arrays to comma-separated strings for storage
+        $categories_str = !empty($categories) ? implode(',', $categories) : '';
+        $year_levels_str = !empty($year_levels) ? implode(',', $year_levels) : '';
+        $semesters_str = !empty($semesters) ? implode(',', $semesters) : '';
+        $sections_str = !empty($sections) ? implode(',', $sections) : '';
+        
+        // Create single record per physical book with all applicable contexts
+        $data = [
+            'title' => $_POST['title'],
+            'author' => $_POST['author'],
+            'isbn' => $current_isbn,
+            'category' => $categories_str, // Store as comma-separated string
+            'quantity' => 1, // Each record represents 1 physical book
+            'description' => $_POST['description'],
+            'subject_name' => $_POST['subject_name'] ?? '',
+            'semester' => $semesters_str, // Store as comma-separated string
+            'section' => $sections_str, // Store as comma-separated string
+            'year_level' => $year_levels_str, // Store as comma-separated string
+            'course_code' => $_POST['course_code'] ?? '',
+            'publication_year' => $_POST['publication_year'] ?? null,
+            'book_copy_number' => $i + 1, // Track which copy this is
+            'total_quantity' => $total_quantity, // Reference to total
+            'is_multi_context' => (count($categories) > 1 || count($year_levels) > 1 || count($semesters) > 1 || count($sections) > 1) ? 1 : 0,
+            'same_book_series' => $same_book ? 1 : 0
+        ];
+        
+        $result = $book->addBook($data);
+        
+        // Handle different return values from addBook
+        if ($result === 'archived') {
+            $archived_count++;
+        } elseif ($result) {
+            $success_count++;
+        } else {
+            $error_count++;
         }
     }
     
@@ -106,17 +95,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($success_count > 0 || $archived_count > 0) {
         $book_type = $same_book ? "copies of the same book" : "individual books";
         
+        // Calculate total academic contexts
+        $total_contexts = count($categories) * count($year_levels) * count($semesters) * count($sections);
+        $context_info = "";
+        if ($total_contexts > 1) {
+            $context_info = " (applicable to {$total_contexts} academic contexts)";
+        }
+        
         if ($archived_count > 0 && $success_count > 0) {
             // Both active and archived books were added
-            $total_books_message = "Successfully added {$success_count} {$book_type} to active collection and {$archived_count} to archives (10+ years old)!";
+            $total_books_message = "Successfully added {$success_count} {$book_type} to active collection and {$archived_count} to archives{$context_info}!";
             $_SESSION['message_type'] = 'warning'; // Use warning to indicate mixed results
         } elseif ($archived_count > 0) {
             // Only archived books were added
-            $total_books_message = "Successfully added {$archived_count} {$book_type} to archives (books are 10+ years old)!";
+            $total_books_message = "Successfully added {$archived_count} {$book_type} to archives{$context_info}!";
             $_SESSION['message_type'] = 'info'; // Use info for archive-only additions
         } else {
             // Only active books were added
-            $total_books_message = "Successfully added {$success_count} {$book_type} to active collection!";
+            $total_books_message = "Successfully added {$success_count} {$book_type} to active collection{$context_info}!";
             $_SESSION['message_type'] = 'success';
         }
         
@@ -125,6 +121,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Add error information if any
         if ($error_count > 0) {
             $_SESSION['message'] .= " ({$error_count} failed)";
+        }
+        
+        // Add context information
+        if ($total_contexts > 1) {
+            $context_details = [];
+            if (count($categories) > 1) $context_details[] = count($categories) . " departments";
+            if (count($year_levels) > 1) $context_details[] = count($year_levels) . " year levels";
+            if (count($semesters) > 1) $context_details[] = count($semesters) . " semesters";
+            if (count($sections) > 1) $context_details[] = count($sections) . " sections";
+            
+            $_SESSION['context_info'] = [
+                'details' => implode(', ', $context_details),
+                'message' => "Each book copy is applicable to: " . implode(', ', $context_details)
+            ];
         }
         
         // Add archive notification if applicable
@@ -141,7 +151,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $error_message = 'Failed to add book. Please try again.';
     }
 }
-
 
 // Now set page title and include header
 $page_title = "Add Book - ISAT U Library Miagao Campus";
@@ -188,7 +197,7 @@ include '../includes/header.php';
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Quantity *</label>
                                 <input type="number" class="form-control" name="quantity" id="quantityInput" min="1" value="1" required>
-                                <small class="text-muted">Number of books to add</small>
+                                <small class="text-muted">Number of physical book copies</small>
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Publication Year</label>
@@ -224,7 +233,7 @@ include '../includes/header.php';
                                         </label>
                                     </div>
                                 </div>
-                                <small class="text-muted">Select one or more departments</small>
+                                <small class="text-muted">Select applicable departments</small>
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Same Book for All?</label>
@@ -256,6 +265,11 @@ include '../includes/header.php';
                     <!-- Academic Information -->
                     <div class="mb-4">
                         <h6 class="text-success mb-3"><i class="fas fa-graduation-cap me-2"></i>Academic Information</h6>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Multiple Selection Support:</strong> You can select multiple options in each category. 
+                            Each book copy will be applicable to ALL selected combinations.
+                        </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Subject Name</label>
@@ -338,9 +352,9 @@ include '../includes/header.php';
 
                     <!-- Preview Section -->
                     <div class="mb-4" id="previewSection" style="display: none;">
-                        <h6 class="text-warning mb-3"><i class="fas fa-eye me-2"></i>Preview: Records to be Created</h6>
+                        <h6 class="text-warning mb-3"><i class="fas fa-eye me-2"></i>Preview: Book Copies and Contexts</h6>
                         <div class="alert alert-info">
-                            <small>Based on your selections, <span id="recordCount">0</span> book record(s) will be created.</small>
+                            <small><span id="physicalCopies">0</span> physical book copies will be added, each applicable to <span id="contextCount">0</span> academic context(s).</small>
                         </div>
                         <div id="previewList" class="small"></div>
                     </div>
@@ -366,54 +380,6 @@ include '../includes/header.php';
     </div>
     
     <div class="col-md-4">
-        <!-- Guidelines Card -->
-        <!--<div class="card mb-4">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Dynamic ISBN Guide</h5>
-            </div>
-            <div class="card-body">
-                <h6>How it works:</h6>
-                <ul class="small">
-                    <li><strong>Same Book:</strong> All copies have the same ISBN - only 1 ISBN field shown</li>
-                    <li><strong>Different Books:</strong> Each copy can have different ISBN - multiple ISBN fields shown</li>
-                    <li><strong>Quantity:</strong> Number of ISBN fields matches the quantity entered</li>
-                </ul>
-                
-                <div class="alert alert-success alert-sm mt-3">
-                    <small><i class="fas fa-toggle-on me-1"></i>
-                    <strong>Same Book Example:</strong> 5 copies of "Physics Textbook" 
-                    = 1 ISBN field (all copies share same ISBN)</small>
-                </div>
-                
-                <div class="alert alert-warning alert-sm">
-                    <small><i class="fas fa-toggle-off me-1"></i>
-                    <strong>Different Books Example:</strong> 3 different reference books 
-                    = 3 ISBN fields (each book has unique ISBN)</small>
-                </div>
-            </div>
-        </div>-->
-
-        <!-- Year Input Guide -->
-        <!--<div class="card mb-4">
-            <div class="card-header bg-secondary text-white">
-                <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Publication Year Guide</h5>
-            </div>
-            <div class="card-body">
-                <h6>Publication Year Tips:</h6>
-                <ul class="small">
-                    <li><strong>Optional Field:</strong> Not required but helpful for cataloging</li>
-                    <li><strong>Format:</strong> 4-digit year (e.g., 2024, 2023)</li>
-                    <li><strong>Range:</strong> 1800 to 2030 accepted</li>
-                    <li><strong>Benefits:</strong> Helps identify book editions and relevance</li>
-                </ul>
-                
-                <div class="alert alert-info alert-sm mt-3">
-                    <small><i class="fas fa-lightbulb me-1"></i>
-                    <strong>Tip:</strong> Recent publications (last 5 years) are often preferred 
-                    for technical and scientific subjects.</small>
-                </div>
-            </div>
-        </div>-->
 
         <!-- Department Guidelines Card -->
         <div class="card mb-4">
@@ -460,9 +426,9 @@ include '../includes/header.php';
                 <ul class="small text-muted">
                     <li>Use complete, official book titles</li>
                     <li>Include publication year when known</li>
-                    <li>Include subject codes when available</li>
+                    <li>Select all applicable academic contexts</li>
                     <li>Add detailed descriptions for better searchability</li>
-                    <li>Use preview to check record combinations</li>
+                    <li>Use preview to verify before adding</li>
                 </ul>
 
                 <h6 class="mt-3">Examples:</h6>
@@ -511,13 +477,13 @@ document.getElementById('publicationYear').addEventListener('focus', function() 
     }
 });
 
-// Preview functionality with publication year
+// Updated Preview functionality
 document.getElementById('previewBtn').addEventListener('click', function() {
     const categories = Array.from(document.querySelectorAll('input[name="category[]"]:checked')).map(cb => cb.value);
     const yearLevels = Array.from(document.querySelectorAll('input[name="year_level[]"]:checked')).map(cb => cb.value);
     const semesters = Array.from(document.querySelectorAll('input[name="semester[]"]:checked')).map(cb => cb.value);
     const sectionsInput = document.querySelector('input[name="section"]').value.trim();
-    const sections = sectionsInput ? sectionsInput.split(',').map(s => s.trim()).filter(s => s) : [''];
+    const sections = sectionsInput ? sectionsInput.split(',').map(s => s.trim()).filter(s => s) : [];
     const totalQuantity = parseInt(document.querySelector('input[name="quantity"]').value) || 1;
     const sameBook = document.getElementById('sameBookToggle').checked;
     const publicationYear = document.getElementById('publicationYear').value;
@@ -526,89 +492,85 @@ document.getElementById('previewBtn').addEventListener('click', function() {
     const isbnInputs = document.querySelectorAll('.isbn-input');
     const isbnData = Array.from(isbnInputs).map(input => input.value.trim()).filter(isbn => isbn);
     
-    // Use default values if nothing selected
-    const finalCategories = categories.length > 0 ? categories : [''];
-    const finalYearLevels = yearLevels.length > 0 ? yearLevels : [''];
-    const finalSemesters = semesters.length > 0 ? semesters : [''];
-    const finalSections = sections.length > 0 ? sections : [''];
+    // Calculate academic contexts
+    const finalCategories = categories.length > 0 ? categories : ['Not specified'];
+    const finalYearLevels = yearLevels.length > 0 ? yearLevels : ['Not specified'];
+    const finalSemesters = semesters.length > 0 ? semesters : ['Not specified'];
+    const finalSections = sections.length > 0 ? sections : ['Not specified'];
     
-    let combinations = [];
-    let recordCount = 0;
+    const totalContexts = finalCategories.length * finalYearLevels.length * finalSemesters.length * finalSections.length;
     
-    // Calculate total academic combinations
-    const academicCombinations = finalCategories.length * finalYearLevels.length * finalSemesters.length * finalSections.length;
+    // Update preview
+    document.getElementById('physicalCopies').textContent = totalQuantity;
+    document.getElementById('contextCount').textContent = totalContexts;
     
-    // Total records = quantity × academic combinations (each book copy gets record for each academic context)
-    recordCount = totalQuantity * academicCombinations;
+    // Generate preview list showing book copies and their applicable contexts
+    const previewList = document.getElementById('previewList');
+    let previewHTML = '<div class="row">';
     
-    // Generate preview combinations
-    for (let bookIndex = 1; bookIndex <= totalQuantity; bookIndex++) {
+    // Show book copies
+    previewHTML += '<div class="col-md-6"><h6 class="text-primary">Physical Book Copies:</h6><ul class="list-unstyled">';
+    for (let i = 1; i <= totalQuantity; i++) {
         const bookISBN = sameBook && isbnData.length > 0 ? isbnData[0] : 
-                        (isbnData[bookIndex - 1] || `Book ${bookIndex}`);
-        
+                        (isbnData[i - 1] || 'No ISBN');
+        previewHTML += `
+            <li class="mb-2 p-2 bg-light rounded">
+                <span class="badge ${sameBook ? 'bg-success' : 'bg-primary'} me-2">
+                    ${sameBook ? 'Copy' : 'Book'} ${i}
+                </span>
+                ${bookISBN !== 'No ISBN' ? 
+                    `<span class="badge bg-secondary ms-1">${bookISBN}</span>` : ''}
+                ${publicationYear ? 
+                    `<span class="badge bg-info ms-1">${publicationYear}</span>` : ''}
+            </li>`;
+    }
+    previewHTML += '</ul></div>';
+    
+    // Show applicable contexts
+    previewHTML += '<div class="col-md-6"><h6 class="text-success">Applicable Academic Contexts:</h6>';
+    if (totalContexts <= 10) {
+        previewHTML += '<ul class="list-unstyled small">';
         finalCategories.forEach(category => {
             finalYearLevels.forEach(yearLevel => {
                 finalSemesters.forEach(semester => {
                     finalSections.forEach(section => {
-                        combinations.push({
-                            bookNumber: bookIndex,
-                            isbn: bookISBN,
-                            category: category || 'Not specified',
-                            yearLevel: yearLevel || 'Not specified',
-                            semester: semester || 'Not specified',
-                            section: section || 'Not specified',
-                            publicationYear: publicationYear || 'Not specified'
-                        });
+                        previewHTML += `
+                            <li class="mb-1 p-1 bg-success bg-opacity-10 rounded">
+                                <strong>${category}</strong> - ${yearLevel} - ${semester} - Section ${section}
+                            </li>`;
                     });
                 });
             });
         });
-    }
-    
-    // Update preview
-    document.getElementById('recordCount').textContent = recordCount;
-    
-    // Update preview section text
-    const previewInfo = document.querySelector('#previewSection .alert-info small');
-    previewInfo.innerHTML = `<strong>${recordCount}</strong> individual book record(s) will be created
-        <br><small class="text-muted">
-        ${totalQuantity} ${sameBook ? 'copies of the same book' : 'different books'} × 
-        ${academicCombinations} academic context(s) = ${recordCount} total records
-        ${publicationYear ? `<br>Publication Year: ${publicationYear}` : ''}
-        </small>`;
-    
-    const previewList = document.getElementById('previewList');
-    if (recordCount <= 20) {
-        previewList.innerHTML = '<ul class="list-unstyled mb-0">' + 
-            combinations.map((combo, index) => 
-                `<li class="mb-1 p-2 bg-light rounded">
-                    <span class="badge ${sameBook ? 'bg-success' : 'bg-primary'} me-2">
-                        ${sameBook ? 'Copy' : 'Book'} ${combo.bookNumber}
-                    </span>
-                    <strong>${combo.category}</strong> - ${combo.yearLevel} - ${combo.semester} - Section ${combo.section}
-                    ${combo.isbn !== `Book ${combo.bookNumber}` ? 
-                        `<span class="badge bg-secondary ms-2">${combo.isbn}</span>` : ''}
-                    ${combo.publicationYear !== 'Not specified' ? 
-                        `<span class="badge bg-info ms-1">${combo.publicationYear}</span>` : ''}
-                </li>`
-            ).join('') + '</ul>';
+        previewHTML += '</ul>';
     } else {
-        previewList.innerHTML = `<p class="text-muted">Too many records to display (${recordCount} total). Preview shows first 10:</p>
-            <ul class="list-unstyled mb-0">` + 
-            combinations.slice(0, 10).map(combo => 
-                `<li class="mb-1 p-2 bg-light rounded">
-                    <span class="badge ${sameBook ? 'bg-success' : 'bg-primary'} me-2">
-                        ${sameBook ? 'Copy' : 'Book'} ${combo.bookNumber}
-                    </span>
-                    <strong>${combo.category}</strong> - ${combo.yearLevel} - ${combo.semester} - Section ${combo.section}
-                    ${combo.isbn !== `Book ${combo.bookNumber}` ? 
-                        `<span class="badge bg-secondary ms-2">${combo.isbn}</span>` : ''}
-                    ${combo.publicationYear !== 'Not specified' ? 
-                        `<span class="badge bg-info ms-1">${combo.publicationYear}</span>` : ''}
-                </li>`
-            ).join('') + 
-            `<li class="text-muted">... and ${recordCount - 10} more records</li></ul>`;
+        previewHTML += `<div class="alert alert-info">
+                <small>Too many contexts to display individually (${totalContexts} total)</small>
+            </div>
+            <ul class="list-unstyled small">
+                <li><strong>Departments:</strong> ${finalCategories.join(', ')}</li>
+                <li><strong>Year Levels:</strong> ${finalYearLevels.join(', ')}</li>
+                <li><strong>Semesters:</strong> ${finalSemesters.join(', ')}</li>
+                <li><strong>Sections:</strong> ${finalSections.join(', ')}</li>
+            </ul>`;
     }
+    previewHTML += '</div></div>';
+    
+    // Add summary information
+    previewHTML += `<div class="col-12 mt-3">
+        <div class="alert alert-success">
+            <h6 class="mb-2"><i class="fas fa-check-circle me-2"></i>Summary</h6>
+            <ul class="mb-0 small">
+                <li><strong>${totalQuantity}</strong> physical book ${totalQuantity === 1 ? 'copy' : 'copies'} will be added</li>
+                <li>Each copy applicable to <strong>${totalContexts}</strong> academic context${totalContexts === 1 ? '' : 's'}</li>
+                <li><strong>No duplicate copies</strong> - only real physical books are created</li>
+                <li><strong>Maximum availability</strong> - books usable across all selected contexts</li>
+            </ul>
+        </div>
+    </div>`;
+    
+    previewHTML += '</div>';
+    previewList.innerHTML = previewHTML;
     
     document.getElementById('previewSection').style.display = 'block';
     document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
@@ -677,7 +639,7 @@ function generateISBNFields() {
 
 // ISBN formatting function
 function formatISBN(event) {
-    let value = event.target.value.replace(/[^\d]/g, ''); // Remove non-digits
+    let value = event.target.value.replace(/[^\d]/g, ''); 
     
     if (value.length === 10) {
         // Format as ISBN-10
@@ -850,6 +812,57 @@ document.addEventListener('change', function(e) {
                 option.value = code;
                 courseCodeDatalist.appendChild(option);
             });
+        }
+    }
+});
+
+// Add context explanation tooltip
+document.addEventListener('DOMContentLoaded', function() {
+    // Add helpful tooltips to checkboxes
+    const checkboxGroups = {
+        'category[]': 'Books will be available to all selected departments',
+        'year_level[]': 'Books will be suitable for all selected year levels',
+        'semester[]': 'Books will be available during all selected semesters'
+    };
+    
+    Object.keys(checkboxGroups).forEach(name => {
+        const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
+        checkboxes.forEach(checkbox => {
+            checkbox.setAttribute('title', checkboxGroups[name]);
+        });
+    });
+});
+
+// Visual feedback for multi-selection
+document.addEventListener('change', function(e) {
+    if (e.target.type === 'checkbox' && e.target.name.includes('[]')) {
+        const groupName = e.target.name;
+        const checkedCount = document.querySelectorAll(`input[name="${groupName}"]:checked`).length;
+        const container = e.target.closest('.border.rounded') || e.target.closest('.col-md-3, .col-md-4');
+        
+        if (container) {
+            const label = container.querySelector('label.form-label');
+            if (label && checkedCount > 0) {
+                label.innerHTML = label.textContent.split(' (')[0] + ` (${checkedCount} selected)`;
+            } else if (label && checkedCount === 0) {
+                label.innerHTML = label.textContent.split(' (')[0];
+            }
+        }
+    }
+});
+
+// Highlight academic information section when selections are made
+document.addEventListener('change', function(e) {
+    if (e.target.type === 'checkbox') {
+        const academicSection = document.querySelector('h6.text-success');
+        if (academicSection) {
+            academicSection.style.transition = 'all 0.3s ease';
+            academicSection.style.color = '#198754';
+            academicSection.style.textShadow = '0 0 10px rgba(25, 135, 84, 0.3)';
+            
+            setTimeout(() => {
+                academicSection.style.textShadow = 'none';
+            }, 1000);
         }
     }
 });

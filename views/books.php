@@ -50,25 +50,25 @@ $search = isset($_GET['search']) ? $_GET['search'] : '';
 $departments = [
     'BIT' => [
         'name' => 'Bachelor in Industrial Technology',
-        'color' => 'primary',
+        'color' => 'warning',
         'icon' => 'fas fa-industry',
         'description' => 'Manufacturing, Engineering, Technology'
     ],
     'EDUCATION' => [
         'name' => 'Education Department',
-        'color' => 'success', 
+        'color' => 'primary', 
         'icon' => 'fas fa-graduation-cap',
         'description' => 'Teaching, Learning, Pedagogy'
     ],
     'HBM' => [
         'name' => 'Hotel & Business Management',
-        'color' => 'info',
+        'color' => 'danger',
         'icon' => 'fas fa-building',
         'description' => 'Business, Management, Hospitality'
     ],
     'COMPSTUD' => [
         'name' => 'Computer Studies',
-        'color' => 'warning',
+        'color' => 'dark',
         'icon' => 'fas fa-desktop',
         'description' => 'Information Tech, Software Dev'
     ]
@@ -160,7 +160,7 @@ include '../includes/header.php';
 }
 
 .search-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
     color: white;
     padding: 2rem 0;
     margin-bottom: 2rem;
@@ -222,16 +222,6 @@ include '../includes/header.php';
     position: relative;
 }
 
-.book-info {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    right: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    z-index: 3;
-}
 
 .book-id {
     background: rgba(255,255,255,0.2);
@@ -417,19 +407,19 @@ include '../includes/header.php';
 
 /* Different gradients for different departments */
 .book-card[data-department="BIT"] .book-cover {
-    background: linear-gradient(145deg, #667eea 0%, #764ba2 100%);
+    background: rgb(255 193 7);
 }
 
 .book-card[data-department="EDUCATION"] .book-cover {
-    background: linear-gradient(145deg, #11998e 0%, #38ef7d 100%);
+    background: rgb(13 110 253);
 }
 
 .book-card[data-department="HBM"] .book-cover {
-    background: linear-gradient(145deg, #3498db 0%, #2980b9 100%);
+    background: rgb(220 53 69);
 }
 
 .book-card[data-department="COMPSTUD"] .book-cover {
-    background: linear-gradient(145deg, #f39c12 0%, #d35400 100%);
+    background: rgb(33 37 41);
 }
 
 /* Responsive adjustments */
@@ -475,11 +465,10 @@ include '../includes/header.php';
     <div class="search-section">
         <div class="container">
             <div class="text-center">
-                <h1 class="display-4 mb-3">
-                    <i class="fas fa-book-open me-3"></i>ISAT U Digital Library
+                <h1 class="display-4 mb-3" style="color: black;">
+                    <i class="fas fa-book-open me-3" style="color: black;"></i>ISAT U Digital Library
                 </h1>
-                <p class="lead mb-4">Browse books by department or search our entire collection</p>
-                
+                <p class="lead mb-4" style="color: black;">Browse books by department or search our entire collection</p>                
                 <!-- Quick Search -->
                 <div class="row justify-content-center">
                     <div class="col-md-6">
@@ -572,7 +561,6 @@ include '../includes/header.php';
                 </div>
                 <div>
                     <h1 class="h2 mb-1"><?php echo $deptInfo['name']; ?></h1>
-                    <p class="mb-0 text-muted"><?php echo $deptInfo['description']; ?></p>
                 </div>
             </div>
         <?php else: ?>
@@ -681,15 +669,7 @@ include '../includes/header.php';
                                         <i class="fas fa-book"></i>
                                     </div>
                                     
-                                    <div class="book-info">
-                                        <div class="book-id">#<?php echo $book_item['id']; ?></div>
-                                        <?php if (!$category_filter): ?>
-                                            <?php $deptInfo = $departments[$book_item['category']]; ?>
-                                            <span class="badge bg-<?php echo $deptInfo['color']; ?> department-badge">
-                                                <?php echo $book_item['category']; ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
+                                    
                                     
                                     <!-- Merged book indicator -->
                                     <?php if (count($book_item['academic_contexts']) > 1): ?>

@@ -16,10 +16,10 @@ $categoryCounts = array_column($stats['by_category'], 'count', 'category');
 <div class="row">
     <?php
     $categories = [
-        'BIT' => ['name' => 'Bachelor of Industrial Technology', 'icon' => 'fas fa-microchip', 'color' => 'primary'],
-        'EDUCATION' => ['name' => 'Educational Resources', 'icon' => 'fas fa-graduation-cap', 'color' => 'success'],
-        'HBM' => ['name' => 'Hotel & Business Management', 'icon' => 'fas fa-hotel', 'color' => 'info'],
-        'COMPSTUD' => ['name' => 'Computer Studies', 'icon' => 'fas fa-laptop-code', 'color' => 'warning']
+        'BIT' => ['name' => 'Bachelor of Industrial Technology', 'icon' => 'fas fa-microchip', 'color' => 'warning'],
+        'EDUCATION' => ['name' => 'Educational Resources', 'icon' => 'fas fa-graduation-cap', 'color' => 'primary'],
+        'HBM' => ['name' => 'Hotel & Business Management', 'icon' => 'fas fa-hotel', 'color' => 'danger'],
+        'COMPSTUD' => ['name' => 'Computer Studies', 'icon' => 'fas fa-laptop-code', 'color' => 'dark']
     ];
     
     foreach ($categories as $code => $category):

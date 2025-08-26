@@ -10,7 +10,7 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['username'])) {
 }
 
 // Optional: Check for session timeout
-$session_timeout = 30 * 60; // 30 minutes in seconds
+$session_timeout = 30 * 60; 
 if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $session_timeout) {
     // Session has expired
     $username = $_SESSION['username'] ?? 'User';
@@ -25,14 +25,43 @@ $page_title = "Dashboard - LibCollect: Reference Mapping System";
 include 'includes/header.php';
 include 'classes/Book.php';
 
+$database = new Database();
+$pdo = $database->connect();
 $book = new Book($pdo);
 $stats = $book->getBookStats();
 
-// Get recent activity logs
-$activityQuery = "SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 10";
-$activityStmt = $pdo->prepare($activityQuery);
-$activityStmt->execute();
-$recentActivities = $activityStmt->fetchAll(PDO::FETCH_ASSOC);
+// Handle different stats formats for categories
+$categoryCounts = [];
+
+// Try expanded format first (handles multi-context books)
+if (isset($stats['by_category_expanded']) && !empty($stats['by_category_expanded'])) {
+    foreach ($stats['by_category_expanded'] as $stat) {
+        $categoryCounts[$stat['category']] = $stat['count'];
+    }
+}
+// Fall back to regular format
+elseif (isset($stats['by_category']) && !empty($stats['by_category'])) {
+    foreach ($stats['by_category'] as $stat) {
+        $category = $stat['category'] ?? $stat['primary_category'] ?? 'Unknown';
+        $categoryCounts[$category] = $stat['count'];
+    }
+}
+// Manual fallback if no stats available
+else {
+    foreach (['BIT', 'EDUCATION', 'HBM', 'COMPSTUD'] as $category) {
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM books WHERE FIND_IN_SET(?, category) > 0");
+            $stmt->execute([$category]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            $categoryCounts[$category] = $result['count'] ?? 0;
+        } catch (Exception $e) {
+            $categoryCounts[$category] = 0;
+        }
+    }
+}
+
+// Get recent activity logs using Book class method
+$recentActivities = $book->getActivityLog(10);
 
 // Function to format time ago
 function timeAgo($datetime) {
@@ -58,6 +87,10 @@ function getActivityIcon($action) {
         case 'delete':
         case 'remove':
             return ['icon' => 'fas fa-trash', 'color' => 'danger'];
+        case 'archive':
+            return ['icon' => 'fas fa-archive', 'color' => 'warning'];
+        case 'restore':
+            return ['icon' => 'fas fa-undo-alt', 'color' => 'info'];
         case 'borrow':
             return ['icon' => 'fas fa-hand-holding', 'color' => 'warning'];
         case 'return':
@@ -66,6 +99,11 @@ function getActivityIcon($action) {
             return ['icon' => 'fas fa-sign-in-alt', 'color' => 'success'];
         case 'logout':
             return ['icon' => 'fas fa-sign-out-alt', 'color' => 'secondary'];
+        case 'import':
+        case 'export':
+            return ['icon' => 'fas fa-exchange-alt', 'color' => 'primary'];
+        case 'search':
+            return ['icon' => 'fas fa-search', 'color' => 'info'];
         default:
             return ['icon' => 'fas fa-circle', 'color' => 'primary'];
     }
@@ -77,12 +115,6 @@ function getActivityIcon($action) {
         <div class="col">
             <h1 class="h2 mb-2">Dashboard</h1>
             <p class="mb-0">Overview of ISAT U Library System</p>
-            <!-- Welcome message for logged-in user -->
-            <?php if (isset($_SESSION['full_name'])): ?>
-                <!--<small class="text-muted">Welcome back, <?php echo htmlspecialchars($_SESSION['full_name']); ?>!</small>-->
-            <?php elseif (isset($_SESSION['username'])): ?>
-                <small class="text-muted">Welcome back, <?php echo htmlspecialchars($_SESSION['username']); ?>!</small>
-            <?php endif; ?>
         </div>
         <div class="col-auto">
             <i class="fas fa-chart-line fa-3x opacity-50"></i>
@@ -93,44 +125,64 @@ function getActivityIcon($action) {
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-3 mb-3">
-        <div class="stats-card text-center">
+        <div class="stats-card">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h3 class="text-primary mb-1"><?php echo $stats['total_books']; ?></h3>
-                    <p class="text-muted mb-0">Total Books</p>
+                    <h3 class="text-primary mb-1"><?php echo number_format($stats['total_books']); ?></h3>
+                    <p class="text-muted mb-0">Active Books</p>
+                    <?php if (isset($stats['multi_context_books']) && $stats['multi_context_books'] > 0): ?>
+                        <small class="text-info">
+                            <i class="fas fa-layer-group me-1"></i><?php echo $stats['multi_context_books']; ?> multi-context
+                        </small>
+                    <?php endif; ?>
                 </div>
                 <i class="fas fa-book fa-2x text-primary"></i>
             </div>
         </div>
     </div>
     <div class="col-md-3 mb-3">
-        <div class="stats-card text-center">
+        <div class="stats-card">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h3 class="text-success mb-1">4</h3>
-                    <p class="text-muted mb-0">Categories</p>
+                    <p class="text-muted mb-0">Departments</p>
+                    <small class="text-success">
+                        <i class="fas fa-graduation-cap me-1"></i>Academic Programs
+                    </small>
                 </div>
                 <i class="fas fa-layer-group fa-2x text-success"></i>
             </div>
         </div>
     </div>
     <div class="col-md-3 mb-3">
-        <div class="stats-card text-center">
+        <div class="stats-card">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h3 class="text-info mb-1"><?php echo $stats['total_copies']; ?></h3>
+                    <h3 class="text-info mb-1"><?php echo number_format($stats['total_copies']); ?></h3>
                     <p class="text-muted mb-0">Total Copies</p>
+                    <small class="text-info">
+                        <i class="fas fa-copy me-1"></i>Physical books
+                    </small>
                 </div>
                 <i class="fas fa-copy fa-2x text-info"></i>
             </div>
         </div>
     </div>
     <div class="col-md-3 mb-3">
-        <div class="stats-card text-center">
+        <div class="stats-card">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h3 class="text-warning mb-1"><?php echo $stats['total_copies']; ?></h3>
+                    <h3 class="text-warning mb-1"><?php echo number_format($stats['available_copies']); ?></h3>
                     <p class="text-muted mb-0">Available</p>
+                    <?php if (isset($stats['borrowed_books']) && $stats['borrowed_books'] > 0): ?>
+                        <small class="text-warning">
+                            <i class="fas fa-hand-holding me-1"></i><?php echo $stats['borrowed_books']; ?> borrowed
+                        </small>
+                    <?php else: ?>
+                        <small class="text-success">
+                            <i class="fas fa-check-circle me-1"></i>All available
+                        </small>
+                    <?php endif; ?>
                 </div>
                 <i class="fas fa-check-circle fa-2x text-warning"></i>
             </div>
@@ -143,25 +195,50 @@ function getActivityIcon($action) {
     <div class="col-md-6 mb-4">
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Books by Category</h5>
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Books by Department</h5>
             </div>
             <div class="card-body">
                 <div class="row text-center">
                     <?php
-                    $categoryColors = ['BIT' => 'primary', 'EDUCATION' => 'success', 'HBM' => 'info', 'COMPSTUD' => 'warning'];
-                    $categoryCounts = array_column($stats['by_category'], 'count', 'category');
+                    $categoryColors = [
+                        'BIT' => ['color' => 'warning', 'name' => 'Bachelor of Industrial Technology'], // Yellow
+                        'EDUCATION' => ['color' => 'primary', 'name' => 'Education'], // Blue
+                        'HBM' => ['color' => 'danger', 'name' => 'Hotel & Business Management'], // Red
+                        'COMPSTUD' => ['color' => 'dark', 'name' => 'Computer Studies'] // Black
+                    ];
+                
                     
-                    foreach (['BIT', 'EDUCATION', 'HBM', 'COMPSTUD'] as $index => $category):
+                    foreach ($categoryColors as $category => $info):
                         $count = isset($categoryCounts[$category]) ? $categoryCounts[$category] : 0;
-                        $color = $categoryColors[$category];
                     ?>
                     <div class="col-6 mb-3">
-                        <?php if ($index % 2 == 0): ?><div class="border-end"><?php endif; ?>
-                            <h4 class="text-<?php echo $color; ?>"><?php echo $count; ?></h4>
-                            <span class="badge bg-<?php echo $color; ?>"><?php echo $category; ?></span>
-                        <?php if ($index % 2 == 0): ?></div><?php endif; ?>
+                        <div class="category-stat p-2">
+                            <h4 class="text-<?php echo $info['color']; ?> mb-1"><?php echo number_format($count); ?></h4>
+                            <span class="badge bg-<?php echo $info['color']; ?> mb-2"><?php echo $category; ?></span>
+                            <p class="small text-muted mb-0 px-1"><?php echo $info['name']; ?></p>
+                            <?php if ($count > 0 && $stats['total_books'] > 0): ?>
+                                <small class="text-<?php echo $info['color']; ?>">
+                                    <?php 
+                                    $percentage = round(($count / $stats['total_books']) * 100, 1);
+                                    echo $percentage . '% of collection';
+                                    ?>
+                                </small>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <?php endforeach; ?>
+                </div>
+                
+                <div class="mt-3 pt-3 border-top">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted">Total Collection:</span>
+                        <strong><?php echo number_format($stats['total_books']); ?> books</strong>
+                    </div>
+                    <div class="text-center">
+                        <a href="views/books.php" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-list me-1"></i>View All Books
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -189,17 +266,17 @@ function getActivityIcon($action) {
                                             <h6 class="mb-1 fw-bold text-capitalize"><?php echo htmlspecialchars($activity['action']); ?></h6>
                                             <p class="mb-1 small"><?php echo htmlspecialchars($activity['description']); ?></p>
                                             
-                                            <?php if ($activity['book_title']): ?>
-                                            <div class="small text-muted">
+                                            <?php if (!empty($activity['book_title'])): ?>
+                                            <div class="small text-muted mb-1">
                                                 <i class="fas fa-book me-1"></i>
                                                 <strong>Book:</strong> <?php echo htmlspecialchars($activity['book_title']); ?>
-                                                <?php if ($activity['category']): ?>
-                                                    <span class="badge bg-secondary ms-2"><?php echo $activity['category']; ?></span>
+                                                <?php if (!empty($activity['category'])): ?>
+                                                    <span class="badge bg-secondary ms-2"><?php echo htmlspecialchars($activity['category']); ?></span>
                                                 <?php endif; ?>
                                             </div>
                                             <?php endif; ?>
                                             
-                                            <?php if ($activity['user_name']): ?>
+                                            <?php if (!empty($activity['user_name'])): ?>
                                             <div class="small text-muted">
                                                 <i class="fas fa-user me-1"></i>
                                                 <strong>By:</strong> <?php echo htmlspecialchars($activity['user_name']); ?>
@@ -232,6 +309,45 @@ function getActivityIcon($action) {
     </div>
 </div>
 
+<!-- Quick Actions Row -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3 mb-3">
+                        <a href="views/add-book.php" class="btn btn-outline-success btn-lg w-100">
+                            <i class="fas fa-plus-circle fa-2x d-block mb-2"></i>
+                            Add New Book
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="views/books.php" class="btn btn-outline-primary btn-lg w-100">
+                            <i class="fas fa-search fa-2x d-block mb-2"></i>
+                            Browse Books
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="views/archives.php" class="btn btn-outline-warning btn-lg w-100">
+                            <i class="fas fa-archive fa-2x d-block mb-2"></i>
+                            Manage Archives
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="views/reports.php" class="btn btn-outline-info btn-lg w-100">
+                            <i class="fas fa-chart-bar fa-2x d-block mb-2"></i>
+                            View Reports
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
 .activity-timeline {
     max-height: 400px;
@@ -252,11 +368,27 @@ function getActivityIcon($action) {
     border-radius: 10px;
     padding: 20px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    transition: transform 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s;
+    height: 100%;
 }
 
 .stats-card:hover {
     transform: translateY(-5px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.category-stat {
+    transition: all 0.3s ease;
+    border-radius: 8px;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.category-stat:hover {
+    background-color: rgba(0,0,0,0.03);
+    transform: translateY(-2px);
 }
 
 /* Custom scrollbar for activity timeline */
@@ -276,6 +408,55 @@ function getActivityIcon($action) {
 
 .activity-timeline::-webkit-scrollbar-thumb:hover {
     background: #218838;
+}
+
+/* Card hover effects */
+.card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* Badge improvements */
+.badge {
+    font-weight: 500;
+}
+
+/* Quick action buttons */
+.btn-lg i {
+    opacity: 0.7;
+}
+
+.btn-lg:hover i {
+    opacity: 1;
+    transform: scale(1.1);
+    transition: all 0.2s;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .stats-card {
+        margin-bottom: 1rem;
+    }
+    
+    .activity-timeline {
+        max-height: 300px;
+    }
+    
+    .btn-lg {
+        font-size: 0.9rem;
+    }
+    
+    .btn-lg i {
+        font-size: 1.5rem !important;
+    }
+    
+    .category-stat {
+        min-height: 100px;
+    }
 }
 </style>
 
