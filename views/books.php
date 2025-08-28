@@ -407,19 +407,19 @@ include '../includes/header.php';
 
 /* Different gradients for different departments */
 .book-card[data-department="BIT"] .book-cover {
-    background: rgb(255 193 7);
+    background: rgb(255 193 7) !important;
 }
 
 .book-card[data-department="EDUCATION"] .book-cover {
-    background: rgb(13 110 253);
+    background: rgb(13 110 253) !important;
 }
 
 .book-card[data-department="HBM"] .book-cover {
-    background: rgb(220 53 69);
+    background: rgb(220 53 69) !important;
 }
 
 .book-card[data-department="COMPSTUD"] .book-cover {
-    background: rgb(33 37 41);
+    background: rgb(33 37 41) !important;
 }
 
 /* Responsive adjustments */
@@ -662,7 +662,11 @@ include '../includes/header.php';
                 <div class="row g-3">
                     <?php foreach ($books as $book_item): ?>
                         <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
-                            <div class="card book-card shadow-sm" data-department="<?php echo $book_item['category']; ?>">
+                            <?php
+                            // Determine which department color to use based on current filter
+                            $displayDepartment = $category_filter ? $category_filter : $book_item['category'];
+                            ?>
+                            <div class="card book-card shadow-sm" data-department="<?php echo $displayDepartment; ?>">
                                 <!-- Enhanced Book Cover -->
                                 <div class="book-cover">
                                     <div class="book-spine">
@@ -675,6 +679,24 @@ include '../includes/header.php';
                                     <?php if (count($book_item['academic_contexts']) > 1): ?>
                                         <div class="merged-indicator">
                                             <i class="fas fa-layer-group me-1"></i><?php echo count($book_item['academic_contexts']); ?> Uses
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <!-- Multi-department indicator -->
+                                    <?php
+                                    // Check if this book has multiple departments across all contexts
+                                    $allDepartments = [];
+                                    foreach ($book_item['academic_contexts'] as $context) {
+                                        if (!empty($context['category']) && !in_array($context['category'], $allDepartments)) {
+                                            $allDepartments[] = $context['category'];
+                                        }
+                                    }
+                                    $hasMultipleDepartments = count($allDepartments) > 1;
+                                    ?>
+
+                                    <?php if ($hasMultipleDepartments): ?>
+                                        <div class="multi-department-indicator" style="position: absolute; top: 8px; left: 8px; background: rgba(255,255,255,0.9); color: #6c757d; padding: 2px 6px; border-radius: 8px; font-size: 0.65rem; z-index: 3; backdrop-filter: blur(10px);">
+                                            <i class="fas fa-building me-1"></i>Multi-Dept
                                         </div>
                                     <?php endif; ?>
                                     
@@ -739,9 +761,16 @@ include '../includes/header.php';
                                             <?php foreach ($contextsByDept as $dept => $contexts): ?>
                                                 <div class="context-group">
                                                     <div class="d-flex align-items-center mb-2">
-                                                        <strong class="text-<?php echo $departments[$dept]['color'] ?? 'primary'; ?> me-2">
-                                                            <?php echo $dept; ?>
-                                                        </strong>
+                                                        <?php if (isset($departments[$dept])): ?>
+                                                            <span class="badge bg-<?php echo $departments[$dept]['color']; ?> me-2">
+                                                                <i class="<?php echo $departments[$dept]['icon']; ?> me-1"></i>
+                                                                <?php echo $dept; ?>
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <strong class="text-primary me-2">
+                                                                <?php echo $dept; ?>
+                                                            </strong>
+                                                        <?php endif; ?>
                                                         <small class="text-muted">(<?php echo count($contexts); ?> context<?php echo count($contexts) > 1 ? 's' : ''; ?>)</small>
                                                     </div>
                                                     
