@@ -46,10 +46,10 @@ foreach ($departments as $code => $dept) {
         'label' => $dept['name'],
         'value' => count($dept['books']),
         'color' => match($code) {
-            'BIT' => '#007bff',
-            'EDUCATION' => '#28a745',
-            'HBM' => '#17a2b8',
-            'COMPSTUD' => '#ffc107'
+            'BIT' => '#ffc107',
+            'EDUCATION' => '#0d6efd',
+            'HBM' => '#dc3545',
+            'COMPSTUD' => '#212529'
         }
     ];
 }

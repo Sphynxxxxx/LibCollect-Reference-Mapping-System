@@ -1595,78 +1595,87 @@ class Book {
     /**
      * Manually archive a book
      */
-    public function archiveBook($bookId, $reason = 'Manual archiving', $archivedBy = 'Admin') {
+    public function archiveBook($data, $reason, $archivedBy) {
         try {
-            $this->pdo->beginTransaction();
-            
-            // Get book details
-            $book = $this->getBookById($bookId);
-            if (!$book) {
-                throw new Exception("Book not found");
-            }
-            
-            // Create archive table if needed
-            $this->createArchivedBooksTable();
-            
-            // Insert into archived_books
+            // Insert into archived_books table
             $sql = "INSERT INTO archived_books (
                 original_id, title, author, isbn, category, quantity, description, 
                 subject_name, semester, section, year_level, course_code, publication_year,
                 book_copy_number, total_quantity, is_multi_context, same_book_series,
-                original_created_at, original_updated_at, archived_at, archive_reason, archived_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)";
+                original_created_at, original_updated_at, archive_reason, archived_by, archiving_method
+            ) VALUES (
+                :original_id, :title, :author, :isbn, :category, :quantity, :description,
+                :subject_name, :semester, :section, :year_level, :course_code, :publication_year,
+                :book_copy_number, :total_quantity, :is_multi_context, :same_book_series,
+                NOW(), NOW(), :archive_reason, :archived_by, 'manual'
+            )";
             
             $stmt = $this->pdo->prepare($sql);
-            $result = $stmt->execute([
-                $book['id'],
-                $book['title'],
-                $book['author'],
-                $book['isbn'] ?? '',
-                $book['category'],
-                $book['quantity'] ?? 1,
-                $book['description'] ?? '',
-                $book['subject_name'] ?? '',
-                $book['semester'] ?? '',
-                $book['section'] ?? '',
-                $book['year_level'] ?? '',
-                $book['course_code'] ?? '',
-                $book['publication_year'] ?? null,
-                $book['book_copy_number'] ?? null,
-                $book['total_quantity'] ?? null,
-                $book['is_multi_context'] ?? 0,
-                $book['same_book_series'] ?? 0,
-                $book['created_at'] ?? null,
-                $book['updated_at'] ?? null,
-                $reason,
-                $archivedBy
-            ]);
             
-            if (!$result) {
-                throw new Exception("Failed to insert into archive");
+            // Use 0 for original_id since we're archiving directly
+            $stmt->bindValue(':original_id', 0, PDO::PARAM_INT);
+            $stmt->bindValue(':title', $data['title']);
+            $stmt->bindValue(':author', $data['author']);
+            $stmt->bindValue(':isbn', $data['isbn'] ?? '');
+            $stmt->bindValue(':category', $data['category']);
+            $stmt->bindValue(':quantity', $data['quantity']);
+            $stmt->bindValue(':description', $data['description'] ?? '');
+            $stmt->bindValue(':subject_name', $data['subject_name'] ?? '');
+            $stmt->bindValue(':semester', $data['semester'] ?? '');
+            $stmt->bindValue(':section', $data['section'] ?? '');
+            $stmt->bindValue(':year_level', $data['year_level'] ?? '');
+            $stmt->bindValue(':course_code', $data['course_code'] ?? '');
+            $stmt->bindValue(':publication_year', $data['publication_year']);
+            $stmt->bindValue(':book_copy_number', $data['book_copy_number']);
+            $stmt->bindValue(':total_quantity', $data['total_quantity']);
+            $stmt->bindValue(':is_multi_context', $data['is_multi_context']);
+            $stmt->bindValue(':same_book_series', $data['same_book_series']);
+            $stmt->bindValue(':archive_reason', $reason);
+            $stmt->bindValue(':archived_by', $archivedBy);
+            
+            if ($stmt->execute()) {
+                // Log the archiving activity
+                $this->logActivity(
+                    'manual_archive',
+                    "Manually archived book: \"{$data['title']}\" - Reason: {$reason}",
+                    null,
+                    $data['title'],
+                    $data['category'],
+                    $_SESSION['user_id'] ?? null,
+                    $_SESSION['user_name'] ?? 'System'
+                );
+                
+                return true;
             }
             
-            // Delete from active books
-            $stmt = $this->pdo->prepare("DELETE FROM books WHERE id = ?");
-            $deleteResult = $stmt->execute([$bookId]);
+            return false;
+        } catch (PDOException $e) {
+            error_log("Archive Book Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // Add this method to your Book class
+    public function logActivity($action, $description, $book_id = null, $book_title = null, $category = null, $user_id = null, $user_name = null) {
+        try {
+            $sql = "INSERT INTO activity_logs (action, description, book_id, book_title, category, user_id, user_name, ip_address, user_agent, created_at) 
+                    VALUES (:action, :description, :book_id, :book_title, :category, :user_id, :user_name, :ip_address, :user_agent, NOW())";
             
-            if (!$deleteResult) {
-                throw new Exception("Failed to remove from active books");
-            }
+            $stmt = $this->pdo->prepare($sql);
             
-            $this->pdo->commit();
+            $stmt->bindValue(':action', $action);
+            $stmt->bindValue(':description', $description);
+            $stmt->bindValue(':book_id', $book_id, PDO::PARAM_INT);
+            $stmt->bindValue(':book_title', $book_title);
+            $stmt->bindValue(':category', $category);
+            $stmt->bindValue(':user_id', $user_id, PDO::PARAM_INT);
+            $stmt->bindValue(':user_name', $user_name);
+            $stmt->bindValue(':ip_address', $_SERVER['REMOTE_ADDR'] ?? '');
+            $stmt->bindValue(':user_agent', $_SERVER['HTTP_USER_AGENT'] ?? '');
             
-            // Log the archive activity
-            $this->logger->logBookActivity(
-                'archive',
-                ['id' => $bookId, 'title' => $book['title'], 'category' => $book['category']],
-                "Manually archived - Reason: {$reason}"
-            );
-            
-            return true;
-            
-        } catch (Exception $e) {
-            $this->pdo->rollBack();
-            error_log("Manual archive failed: " . $e->getMessage());
+            return $stmt->execute();
+        } catch (PDOException $e) {
+            error_log("Log Activity Error: " . $e->getMessage());
             return false;
         }
     }

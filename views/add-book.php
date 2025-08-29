@@ -11,6 +11,9 @@ $book = new Book($pdo);
 
 // Handle form submission BEFORE any HTML output
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Check if this is an archive action
+    $is_archive_action = isset($_POST['archive_reason']) && !empty($_POST['archive_reason']);
+    
     // Handle multiple selections
     $categories = isset($_POST['category']) ? $_POST['category'] : [];
     $year_levels = isset($_POST['year_level']) ? $_POST['year_level'] : [];
@@ -24,6 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $error_count = 0;
     $archived_count = 0; // Track archived books
     $total_quantity = $_POST['quantity'];
+    
+    // Get archive reason if provided
+    $archive_reason = isset($_POST['archive_reason']) ? $_POST['archive_reason'] : '';
     
     // Handle ISBN data - could be single ISBN or array of ISBNs
     $isbn_data = [];
@@ -39,6 +45,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $same_book = isset($_POST['same_book']) && $_POST['same_book'] === 'true';
     $unique_isbns = array_unique(array_filter($isbn_data));
     $unique_book_count = count($unique_isbns);
+    
+    // Check if book should be archived (5+ years old)
+    $publication_year = $_POST['publication_year'] ?? null;
+    $current_year = date('Y');
+    $should_archive = false;
+    $archive_reason_display = '';
+    
+    if ($publication_year && ($current_year - $publication_year) >= 5) {
+        $should_archive = true;
+        $archive_reason_display = "Publication year: $publication_year (5+ years old)";
+        
+        // If archive reason was provided, use it
+        if (!empty($archive_reason)) {
+            $archive_reason_display = $archive_reason;
+        }
+    }
     
     // Create book records - ONE record per physical book copy
     for ($i = 0; $i < $total_quantity; $i++) {
@@ -72,22 +94,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             'section' => $sections_str, // Store as comma-separated string
             'year_level' => $year_levels_str, // Store as comma-separated string
             'course_code' => $_POST['course_code'] ?? '',
-            'publication_year' => $_POST['publication_year'] ?? null,
+            'publication_year' => $publication_year,
             'book_copy_number' => $i + 1, // Track which copy this is
             'total_quantity' => $total_quantity, // Reference to total
             'is_multi_context' => (count($categories) > 1 || count($year_levels) > 1 || count($semesters) > 1 || count($sections) > 1) ? 1 : 0,
             'same_book_series' => $same_book ? 1 : 0
         ];
         
-        $result = $book->addBook($data);
-        
-        // Handle different return values from addBook
-        if ($result === 'archived') {
-            $archived_count++;
-        } elseif ($result) {
-            $success_count++;
+        // If book should be archived and user provided a reason, archive it
+        if ($should_archive && !empty($archive_reason)) {
+            $result = $book->archiveBook($data, $archive_reason, $_SESSION['user_name'] ?? 'System');
+            
+            if ($result) {
+                $archived_count++;
+            } else {
+                $error_count++;
+            }
         } else {
-            $error_count++;
+            // Add to regular collection
+            $result = $book->addBook($data);
+            
+            if ($result) {
+                $success_count++;
+            } else {
+                $error_count++;
+            }
         }
     }
     
@@ -105,11 +136,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($archived_count > 0 && $success_count > 0) {
             // Both active and archived books were added
             $total_books_message = "Successfully added {$success_count} {$book_type} to active collection and {$archived_count} to archives{$context_info}!";
-            $_SESSION['message_type'] = 'warning'; // Use warning to indicate mixed results
+            $_SESSION['message_type'] = 'warning'; 
         } elseif ($archived_count > 0) {
             // Only archived books were added
             $total_books_message = "Successfully added {$archived_count} {$book_type} to archives{$context_info}!";
-            $_SESSION['message_type'] = 'info'; // Use info for archive-only additions
+            $_SESSION['message_type'] = 'info'; 
         } else {
             // Only active books were added
             $total_books_message = "Successfully added {$success_count} {$book_type} to active collection{$context_info}!";
@@ -141,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($archived_count > 0) {
             $_SESSION['archive_info'] = [
                 'count' => $archived_count,
-                'message' => "Note: {$archived_count} books were automatically archived due to their publication year being 10+ years old."
+                'message' => "Note: {$archived_count} books were manually archived with reason: '{$archive_reason}'"
             ];
         }
         
@@ -357,6 +388,21 @@ include '../includes/header.php';
                             <small><span id="physicalCopies">0</span> physical book copies will be added, each applicable to <span id="contextCount">0</span> academic context(s).</small>
                         </div>
                         <div id="previewList" class="small"></div>
+                    </div>
+
+                    <!-- Archive Reason Section  -->
+                    <div class="mb-4" id="archiveSection" style="display: none;">
+                        <h6 class="text-warning mb-3"><i class="fas fa-archive me-2"></i>Archive This Book</h6>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>This book is 5+ years old.</strong> Please provide a reason for archiving it instead of adding to the active collection.
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Archive Reason *</label>
+                            <textarea class="form-control" name="archive_reason" id="archiveReason" rows="3" 
+                                    placeholder="Explain why this book should be archived (e.g., outdated content, new edition available, etc.)"></textarea>
+                            <small class="text-muted">Required for books published 5+ years ago</small>
+                        </div>
                     </div>
 
                     <!-- Action Buttons -->
@@ -636,6 +682,31 @@ function generateISBNFields() {
         input.addEventListener('input', formatISBN);
     });
 }
+
+// Function to check if book should be archived and show/hide archive section
+function checkArchiveStatus() {
+    const publicationYear = document.getElementById('publicationYear').value;
+    const currentYear = new Date().getFullYear();
+    const archiveSection = document.getElementById('archiveSection');
+    
+    if (publicationYear && (currentYear - parseInt(publicationYear)) >= 5) {
+        archiveSection.style.display = 'block';
+        document.getElementById('archiveReason').setAttribute('required', 'required');
+    } else {
+        archiveSection.style.display = 'none';
+        document.getElementById('archiveReason').removeAttribute('required');
+    }
+}
+
+// Event listener for publication year changes
+document.getElementById('publicationYear').addEventListener('input', function() {
+    checkArchiveStatus();
+    
+    // Also update the preview if it's visible
+    if (document.getElementById('previewSection').style.display !== 'none') {
+        document.getElementById('previewBtn').click();
+    }
+});
 
 // ISBN formatting function
 function formatISBN(event) {

@@ -5,7 +5,52 @@ include '../classes/Book.php';
 
 $book = new Book($pdo);
 $stats = $book->getBookStats();
-$categoryCounts = array_column($stats['by_category'], 'count', 'category');
+
+// Get all books to extract categories
+$allBooks = $book->getAllBooks();
+
+// Process category counts properly
+$categoryCounts = [];
+$allCategories = [];
+
+foreach ($allBooks as $bookItem) {
+    // Split the category field which may contain multiple categories separated by commas
+    $bookCategories = explode(',', $bookItem['category']);
+    
+    foreach ($bookCategories as $cat) {
+        $cat = trim($cat);
+        if (!empty($cat)) {
+            if (!isset($categoryCounts[$cat])) {
+                $categoryCounts[$cat] = 0;
+            }
+            $categoryCounts[$cat]++;
+            
+            // Store all unique categories
+            if (!in_array($cat, $allCategories)) {
+                $allCategories[] = $cat;
+            }
+        }
+    }
+}
+
+// Define category metadata (name, icon, color)
+$categoryMetadata = [
+    'BIT' => ['name' => 'Bachelor of Industrial Technology', 'icon' => 'fas fa-microchip', 'color' => 'warning'],
+    'EDUCATION' => ['name' => 'Educational Resources', 'icon' => 'fas fa-graduation-cap', 'color' => 'primary'],
+    'HBM' => ['name' => 'Hotel & Business Management', 'icon' => 'fas fa-hotel', 'color' => 'danger'],
+    'COMPSTUD' => ['name' => 'Computer Studies', 'icon' => 'fas fa-laptop-code', 'color' => 'dark']
+];
+
+// For any categories not in our metadata, create default entries
+foreach ($allCategories as $cat) {
+    if (!isset($categoryMetadata[$cat])) {
+        $categoryMetadata[$cat] = [
+            'name' => $cat,
+            'icon' => 'fas fa-book',
+            'color' => 'secondary'
+        ];
+    }
+}
 ?>
 
 <div class="page-header">
@@ -15,14 +60,7 @@ $categoryCounts = array_column($stats['by_category'], 'count', 'category');
 
 <div class="row">
     <?php
-    $categories = [
-        'BIT' => ['name' => 'Bachelor of Industrial Technology', 'icon' => 'fas fa-microchip', 'color' => 'warning'],
-        'EDUCATION' => ['name' => 'Educational Resources', 'icon' => 'fas fa-graduation-cap', 'color' => 'primary'],
-        'HBM' => ['name' => 'Hotel & Business Management', 'icon' => 'fas fa-hotel', 'color' => 'danger'],
-        'COMPSTUD' => ['name' => 'Computer Studies', 'icon' => 'fas fa-laptop-code', 'color' => 'dark']
-    ];
-    
-    foreach ($categories as $code => $category):
+    foreach ($categoryMetadata as $code => $category):
         $count = isset($categoryCounts[$code]) ? $categoryCounts[$code] : 0;
         $percentage = $stats['total_books'] > 0 ? round(($count / $stats['total_books']) * 100) : 0;
     ?>
@@ -67,7 +105,7 @@ $categoryCounts = array_column($stats['by_category'], 'count', 'category');
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($categories as $code => $category):
+                            <?php foreach ($categoryMetadata as $code => $category):
                                 $count = isset($categoryCounts[$code]) ? $categoryCounts[$code] : 0;
                                 $percentage = $stats['total_books'] > 0 ? round(($count / $stats['total_books']) * 100) : 0;
                             ?>
