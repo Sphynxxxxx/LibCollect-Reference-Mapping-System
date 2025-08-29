@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 28, 2025 at 09:02 PM
+-- Generation Time: Aug 29, 2025 at 09:01 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -63,7 +63,35 @@ INSERT INTO `activity_logs` (`id`, `action`, `description`, `book_id`, `book_tit
 (370, 'delete', 'Deleted book: \"gfgfgf\" - Permanently removed from library', 155, 'gfgfgf', 'BIT', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-28 18:46:04'),
 (371, 'add', 'Added new book: \"fdggfgdhgfh\" - Quantity: 1, Author: rfererwer, Published: 2024 (Multi-context)', 156, 'fdggfgdhgfh', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-28 18:46:32'),
 (372, 'add', 'Added new book: \"fdggfgdhgfh\" - Quantity: 1, Author: rfererwer, Published: 2024 (Multi-context)', 157, 'fdggfgdhgfh', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-28 18:46:32'),
-(373, 'add', 'Added new book: \"fgbgfgf\" - Quantity: 1, Author: rfererwer, Published: 2024', 158, 'fgbgfgf', 'COMPSTUD', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-28 18:47:40');
+(373, 'add', 'Added new book: \"fgbgfgf\" - Quantity: 1, Author: rfererwer, Published: 2024', 158, 'fgbgfgf', 'COMPSTUD', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-28 18:47:40'),
+(374, 'login', 'User admin (admin@staff.isatu.edu.ph) logged in successfully', NULL, NULL, NULL, 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 17:55:52'),
+(375, 'auto_archive', 'auto_archive performed on book: \"dfsdf\" - Auto-archived due to publication year: 2000', 0, 'dfsdf', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:06:52'),
+(376, 'add_archived', 'add_archived performed on book: \"dfsdf\" - Book added directly to archive - Publication year: 2000', NULL, 'dfsdf', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:06:52'),
+(377, 'permanent_delete', 'Permanently deleted archived book: dfsdf by fdsfdfdfdf', 30, 'dfsdf', 'BIT,EDUCATION', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:08:57'),
+(378, 'permanent_delete', 'Permanently deleted archived book: hghghgh by rfererwer', 27, 'hghghgh', 'BIT,EDUCATION,HBM,COMPSTUD', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:09:00'),
+(379, 'permanent_delete', 'Permanently deleted archived book: hghghgh by rfererwer', 28, 'hghghgh', 'BIT,EDUCATION,HBM,COMPSTUD', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:09:03'),
+(380, 'restore', 'restore performed on book: \"hghghgh\" - Restored from archive', 159, 'hghghgh', 'BIT,EDUCATION,HBM,COMPSTUD', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:09:05'),
+(381, 'delete', 'Deleted book: \"fdggfgdhgfh\" - Permanently removed from library', 156, 'fdggfgdhgfh', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:09:20'),
+(382, 'delete', 'Deleted book: \"fdggfgdhgfh\" - Permanently removed from library', 157, 'fdggfgdhgfh', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:09:24'),
+(383, 'delete', 'Deleted book: \"hghghgh\" - Permanently removed from library', 159, 'hghghgh', 'BIT,EDUCATION,HBM,COMPSTUD', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:09:29'),
+(384, 'auto_archive', 'auto_archive performed on book: \"dfdfd\" - Auto-archived due to publication year: 2020', 0, 'dfdfd', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:10:06'),
+(385, 'add_archived', 'add_archived performed on book: \"dfdfd\" - Book added directly to archive - Publication year: 2020', NULL, 'dfdfd', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:10:06'),
+(386, 'auto_archive', 'auto_archive performed on book: \"dfsdssd\" - Auto-archived due to publication year: 2000', 0, 'dfsdssd', 'BIT', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:23:35'),
+(387, 'add_archived', 'add_archived performed on book: \"dfsdssd\" - Book added directly to archive - Publication year: 2000', NULL, 'dfsdssd', 'BIT', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:23:35'),
+(388, 'permanent_delete', 'Permanently deleted archived book: dfsdssd by qwqwq', 32, 'dfsdssd', 'BIT', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:23:45'),
+(389, 'permanent_delete', 'Permanently deleted archived book: dfdfd by rfererwer', 31, 'dfdfd', 'BIT,EDUCATION', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:23:47'),
+(390, 'auto_archive', 'auto_archive performed on book: \"sasas\" - Auto-archived due to publication year: 2000', 0, 'sasas', 'BIT', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:28:24'),
+(391, 'add_archived', 'add_archived performed on book: \"sasas\" - Book added directly to archive - Publication year: 2000', NULL, 'sasas', 'BIT', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:28:24'),
+(392, 'permanent_delete', 'Permanently deleted archived book: sasas by sasa', 33, 'sasas', 'BIT', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:28:30'),
+(393, 'manual_archive', 'Manually archived book: \"dsdsds\" - Reason: aaaaaaaaaaaa', NULL, 'dsdsds', 'BIT', 5, 'System', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:51:56'),
+(394, 'manual_archive', 'Manually archived book: \"dsdsds\" - Reason: aaaaaaaaaaaa', NULL, 'dsdsds', 'BIT', 5, 'System', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:51:56'),
+(395, 'permanent_delete', 'Permanently deleted archived book: dsdsds by rfererwer', 35, 'dsdsds', 'BIT', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:52:18'),
+(396, 'permanent_delete', 'Permanently deleted archived book: dsdsds by rfererwer', 36, 'dsdsds', 'BIT', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:52:18'),
+(397, 'permanent_delete', 'Permanently deleted archived book: dsdsds by rfererwer', 37, 'dsdsds', 'BIT', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:52:21'),
+(398, 'permanent_delete', 'Permanently deleted archived book: fgfsd by fdsfdfdfdf', 34, 'fgfsd', 'BIT', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:52:24'),
+(399, 'login', 'User admin (admin@staff.isatu.edu.ph) logged in successfully', NULL, NULL, NULL, 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:52:36'),
+(400, 'manual_archive', 'Manually archived book: \"fgdsds\" - Reason: fghfgkjhnfkgfg', NULL, 'fgdsds', 'BIT', 5, 'System', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:53:03'),
+(401, 'manual_archive', 'Manually archived book: \"fgdsds\" - Reason: fghfgkjhnfkgfg', NULL, 'fgdsds', 'BIT', 5, 'System', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:53:03');
 
 -- --------------------------------------------------------
 
@@ -93,18 +121,18 @@ CREATE TABLE `archived_books` (
   `original_created_at` timestamp NULL DEFAULT NULL,
   `original_updated_at` timestamp NULL DEFAULT NULL,
   `archived_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `archive_reason` varchar(255) DEFAULT 'Automatic archiving - 10+ years old',
-  `archived_by` varchar(100) DEFAULT 'System'
+  `archive_reason` varchar(255) DEFAULT NULL,
+  `archived_by` varchar(100) DEFAULT NULL,
+  `archiving_method` enum('auto','manual') DEFAULT 'manual'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `archived_books`
 --
 
-INSERT INTO `archived_books` (`id`, `original_id`, `title`, `author`, `isbn`, `category`, `quantity`, `description`, `subject_name`, `semester`, `section`, `year_level`, `course_code`, `publication_year`, `book_copy_number`, `total_quantity`, `is_multi_context`, `same_book_series`, `original_created_at`, `original_updated_at`, `archived_at`, `archive_reason`, `archived_by`) VALUES
-(27, 0, 'hghghgh', 'rfererwer', '001', 'BIT,EDUCATION,HBM,COMPSTUD', 1, '', 'Computer Networks', 'First Semester,Second Semester', 'B', 'First Year,Second Year,Third Year,Fourth Year', 'COMP-101', 2000, 1, 3, 1, 0, '2025-08-28 18:14:37', '2025-08-28 18:14:37', '2025-08-28 18:14:37', 'Automatic archiving - Publication year 10+ years old', 'System'),
-(28, 0, 'hghghgh', 'rfererwer', '002', 'BIT,EDUCATION,HBM,COMPSTUD', 1, '', 'Computer Networks', 'First Semester,Second Semester', 'B', 'First Year,Second Year,Third Year,Fourth Year', 'COMP-101', 2000, 2, 3, 1, 0, '2025-08-28 18:14:37', '2025-08-28 18:14:37', '2025-08-28 18:14:37', 'Automatic archiving - Publication year 10+ years old', 'System'),
-(29, 0, 'hghghgh', 'rfererwer', '003', 'BIT,EDUCATION,HBM,COMPSTUD', 1, '', 'Computer Networks', 'First Semester,Second Semester', 'B', 'First Year,Second Year,Third Year,Fourth Year', 'COMP-101', 2000, 3, 3, 1, 0, '2025-08-28 18:14:37', '2025-08-28 18:14:37', '2025-08-28 18:14:37', 'Automatic archiving - Publication year 10+ years old', 'System');
+INSERT INTO `archived_books` (`id`, `original_id`, `title`, `author`, `isbn`, `category`, `quantity`, `description`, `subject_name`, `semester`, `section`, `year_level`, `course_code`, `publication_year`, `book_copy_number`, `total_quantity`, `is_multi_context`, `same_book_series`, `original_created_at`, `original_updated_at`, `archived_at`, `archive_reason`, `archived_by`, `archiving_method`) VALUES
+(38, 0, 'fgdsds', 'rfererwer', '006', 'BIT', 1, 'fdfsdfsdf', 'Industrial Safety', 'First Semester,Second Semester', 'B', 'First Year,Second Year', 'BIT-301', 2020, 1, 2, 1, 1, '2025-08-29 18:53:03', '2025-08-29 18:53:03', '2025-08-29 18:53:03', 'fghfgkjhnfkgfg', 'System', 'manual'),
+(39, 0, 'fgdsds', 'rfererwer', '006', 'BIT', 1, 'fdfsdfsdf', 'Industrial Safety', 'First Semester,Second Semester', 'B', 'First Year,Second Year', 'BIT-301', 2020, 2, 2, 1, 1, '2025-08-29 18:53:03', '2025-08-29 18:53:03', '2025-08-29 18:53:03', 'fghfgkjhnfkgfg', 'System', 'manual');
 
 -- --------------------------------------------------------
 
@@ -139,8 +167,6 @@ CREATE TABLE `books` (
 --
 
 INSERT INTO `books` (`id`, `title`, `author`, `isbn`, `category`, `quantity`, `description`, `created_at`, `updated_at`, `subject_name`, `course_code`, `publication_year`, `book_copy_number`, `total_quantity`, `is_multi_context`, `same_book_series`, `year_level`, `semester`, `section`) VALUES
-(156, 'fdggfgdhgfh', 'rfererwer', '001', 'BIT,EDUCATION', 1, '', '2025-08-28 18:46:32', '2025-08-28 18:46:32', 'Hotel Management', 'EDUC-101', 2024, 1, 2, 1, 0, 'First Year,Second Year', 'First Semester,Second Semester', 'A'),
-(157, 'fdggfgdhgfh', 'rfererwer', '004', 'BIT,EDUCATION', 1, '', '2025-08-28 18:46:32', '2025-08-28 18:46:32', 'Hotel Management', 'EDUC-101', 2024, 2, 2, 1, 0, 'First Year,Second Year', 'First Semester,Second Semester', 'A'),
 (158, 'fgbgfgf', 'rfererwer', '006', 'COMPSTUD', 1, '', '2025-08-28 18:47:40', '2025-08-28 18:47:40', 'Data Structures', 'COMP-101', 2024, 1, 1, 0, 1, 'First Year', 'First Semester', 'A');
 
 -- --------------------------------------------------------
@@ -239,19 +265,19 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `activity_logs`
 --
 ALTER TABLE `activity_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=374;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=402;
 
 --
 -- AUTO_INCREMENT for table `archived_books`
 --
 ALTER TABLE `archived_books`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=40;
 
 --
 -- AUTO_INCREMENT for table `books`
 --
 ALTER TABLE `books`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=159;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=160;
 
 --
 -- AUTO_INCREMENT for table `borrowing`
