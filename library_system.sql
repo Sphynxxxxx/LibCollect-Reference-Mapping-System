@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 29, 2025 at 09:01 PM
+-- Generation Time: Sep 17, 2025 at 12:14 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -91,7 +91,25 @@ INSERT INTO `activity_logs` (`id`, `action`, `description`, `book_id`, `book_tit
 (398, 'permanent_delete', 'Permanently deleted archived book: fgfsd by fdsfdfdfdf', 34, 'fgfsd', 'BIT', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:52:24'),
 (399, 'login', 'User admin (admin@staff.isatu.edu.ph) logged in successfully', NULL, NULL, NULL, 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:52:36'),
 (400, 'manual_archive', 'Manually archived book: \"fgdsds\" - Reason: fghfgkjhnfkgfg', NULL, 'fgdsds', 'BIT', 5, 'System', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:53:03'),
-(401, 'manual_archive', 'Manually archived book: \"fgdsds\" - Reason: fghfgkjhnfkgfg', NULL, 'fgdsds', 'BIT', 5, 'System', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:53:03');
+(401, 'manual_archive', 'Manually archived book: \"fgdsds\" - Reason: fghfgkjhnfkgfg', NULL, 'fgdsds', 'BIT', 5, 'System', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36', '2025-08-29 18:53:03'),
+(402, 'login', 'User admin (admin@staff.isatu.edu.ph) logged in successfully', NULL, NULL, NULL, 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-06 10:45:12'),
+(403, 'add', 'Added new book: \"dffhghgfh\" - Quantity: 1, Author: dsfsdf, Published: 2025 (Multi-context)', 160, 'dffhghgfh', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-06 10:45:50'),
+(404, 'add', 'Added new book: \"dffhghgfh\" - Quantity: 1, Author: dsfsdf, Published: 2025 (Multi-context)', 161, 'dffhghgfh', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-06 10:45:50'),
+(405, 'login', 'User admin (admin@staff.isatu.edu.ph) logged in successfully', NULL, NULL, NULL, 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-09 12:31:57'),
+(406, 'add', 'Added new book: \"fdfsdsdf\" - Quantity: 1, Author: dsfsdf, Published: 2025', 162, 'fdfsdsdf', 'BIT', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-09 12:32:16'),
+(407, 'add', 'Added new book: \"7ui9rtuyioyt\" - Quantity: 1, Author: njibmv b, Published: 2025 (Multi-context)', 163, '7ui9rtuyioyt', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-09 12:43:55'),
+(408, 'add', 'Added new book: \"7ui9rtuyioyt\" - Quantity: 1, Author: njibmv b, Published: 2025 (Multi-context)', 164, '7ui9rtuyioyt', 'BIT,EDUCATION', 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-09 12:43:55'),
+(409, 'failed_login', 'Failed login attempt for email: admin@staff.isatu.edu.ph', NULL, NULL, NULL, NULL, 'admin@staff.isatu.edu.ph', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:00:27'),
+(410, 'login', 'User admin (admin@staff.isatu.edu.ph) logged in successfully', NULL, NULL, NULL, 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:00:32'),
+(411, 'manual_archive', 'Manually archived book: \"gdfgfdgd\" - Reason: Donated', NULL, 'gdfgfdgd', 'BIT,EDUCATION', 5, 'System', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:10:27'),
+(412, 'manual_archive', 'Manually archived book: \"gdfgfdgd\" - Reason: Donated', NULL, 'gdfgfdgd', 'BIT,EDUCATION', 5, 'System', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:10:27'),
+(413, 'logout', 'User admin logged out', NULL, NULL, NULL, 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:18:39'),
+(414, 'login', 'User admin (admin@staff.isatu.edu.ph) logged in successfully', NULL, NULL, NULL, 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:18:53'),
+(415, 'logout', 'User admin logged out', NULL, NULL, NULL, 5, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:19:16'),
+(416, 'failed_login', 'Failed login attempt for email: admin@staff.isatu.edu.ph', NULL, NULL, NULL, NULL, 'admin@staff.isatu.edu.ph', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:19:23'),
+(417, 'signup', 'New user registered: admin (admin@staff.isatu.edu.ph) as staff', NULL, NULL, NULL, 6, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:19:44'),
+(418, 'logout', 'User admin logged out', NULL, NULL, NULL, 6, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:31:21'),
+(419, 'login', 'User admin (admin@staff.isatu.edu.ph) logged in successfully', NULL, NULL, NULL, 6, 'admin', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36', '2025-09-17 07:31:27');
 
 -- --------------------------------------------------------
 
@@ -132,7 +150,9 @@ CREATE TABLE `archived_books` (
 
 INSERT INTO `archived_books` (`id`, `original_id`, `title`, `author`, `isbn`, `category`, `quantity`, `description`, `subject_name`, `semester`, `section`, `year_level`, `course_code`, `publication_year`, `book_copy_number`, `total_quantity`, `is_multi_context`, `same_book_series`, `original_created_at`, `original_updated_at`, `archived_at`, `archive_reason`, `archived_by`, `archiving_method`) VALUES
 (38, 0, 'fgdsds', 'rfererwer', '006', 'BIT', 1, 'fdfsdfsdf', 'Industrial Safety', 'First Semester,Second Semester', 'B', 'First Year,Second Year', 'BIT-301', 2020, 1, 2, 1, 1, '2025-08-29 18:53:03', '2025-08-29 18:53:03', '2025-08-29 18:53:03', 'fghfgkjhnfkgfg', 'System', 'manual'),
-(39, 0, 'fgdsds', 'rfererwer', '006', 'BIT', 1, 'fdfsdfsdf', 'Industrial Safety', 'First Semester,Second Semester', 'B', 'First Year,Second Year', 'BIT-301', 2020, 2, 2, 1, 1, '2025-08-29 18:53:03', '2025-08-29 18:53:03', '2025-08-29 18:53:03', 'fghfgkjhnfkgfg', 'System', 'manual');
+(39, 0, 'fgdsds', 'rfererwer', '006', 'BIT', 1, 'fdfsdfsdf', 'Industrial Safety', 'First Semester,Second Semester', 'B', 'First Year,Second Year', 'BIT-301', 2020, 2, 2, 1, 1, '2025-08-29 18:53:03', '2025-08-29 18:53:03', '2025-08-29 18:53:03', 'fghfgkjhnfkgfg', 'System', 'manual'),
+(40, 0, 'gdfgfdgd', 'fdsdf', '001', 'BIT,EDUCATION', 1, '', 'Educational Psychology', 'First Semester,Second Semester', 'B', 'First Year,Second Year', 'EDUC-101', 2000, 1, 2, 1, 0, '2025-09-17 07:10:27', '2025-09-17 07:10:27', '2025-09-17 07:10:27', 'Donated', 'System', 'manual'),
+(41, 0, 'gdfgfdgd', 'fdsdf', '002', 'BIT,EDUCATION', 1, '', 'Educational Psychology', 'First Semester,Second Semester', 'B', 'First Year,Second Year', 'EDUC-101', 2000, 2, 2, 1, 0, '2025-09-17 07:10:27', '2025-09-17 07:10:27', '2025-09-17 07:10:27', 'Donated', 'System', 'manual');
 
 -- --------------------------------------------------------
 
@@ -167,7 +187,12 @@ CREATE TABLE `books` (
 --
 
 INSERT INTO `books` (`id`, `title`, `author`, `isbn`, `category`, `quantity`, `description`, `created_at`, `updated_at`, `subject_name`, `course_code`, `publication_year`, `book_copy_number`, `total_quantity`, `is_multi_context`, `same_book_series`, `year_level`, `semester`, `section`) VALUES
-(158, 'fgbgfgf', 'rfererwer', '006', 'COMPSTUD', 1, '', '2025-08-28 18:47:40', '2025-08-28 18:47:40', 'Data Structures', 'COMP-101', 2024, 1, 1, 0, 1, 'First Year', 'First Semester', 'A');
+(158, 'fgbgfgf', 'rfererwer', '006', 'COMPSTUD', 1, '', '2025-08-28 18:47:40', '2025-08-28 18:47:40', 'Data Structures', 'COMP-101', 2024, 1, 1, 0, 1, 'First Year', 'First Semester', 'A'),
+(160, 'dffhghgfh', 'dsfsdf', '001', 'BIT,EDUCATION', 1, 'dAFfds', '2025-09-06 10:45:50', '2025-09-06 10:45:50', 'gvdhfvw er', 'jfbndfb', 2025, 1, 2, 1, 0, 'First Year,Second Year', 'First Semester,Second Semester', 'B'),
+(161, 'dffhghgfh', 'dsfsdf', '002', 'BIT,EDUCATION', 1, 'dAFfds', '2025-09-06 10:45:50', '2025-09-06 10:45:50', 'gvdhfvw er', 'jfbndfb', 2025, 2, 2, 1, 0, 'First Year,Second Year', 'First Semester,Second Semester', 'B'),
+(162, 'fdfsdsdf', 'dsfsdf', '001', 'BIT', 1, '', '2025-09-09 12:32:16', '2025-09-09 12:32:16', 'Industrial Safety', 'BIT-101', 2025, 1, 1, 0, 0, 'First Year', 'First Semester', 'B'),
+(163, '7ui9rtuyioyt', 'njibmv b', '001', 'BIT,EDUCATION', 1, 'fdsfdf', '2025-09-09 12:43:55', '2025-09-09 12:43:55', 'Educational Psychology', 'EDUC-101', 2025, 1, 2, 1, 0, 'First Year', 'First Semester,Second Semester', 'B'),
+(164, '7ui9rtuyioyt', 'njibmv b', '2', 'BIT,EDUCATION', 1, 'fdsfdf', '2025-09-09 12:43:55', '2025-09-09 12:43:55', 'Educational Psychology', 'EDUC-101', 2025, 2, 2, 1, 0, 'First Year', 'First Semester,Second Semester', 'B');
 
 -- --------------------------------------------------------
 
@@ -198,6 +223,11 @@ CREATE TABLE `users` (
   `password` varchar(255) NOT NULL,
   `email` varchar(100) NOT NULL,
   `full_name` varchar(100) NOT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `department` varchar(50) DEFAULT 'Library',
+  `position` varchar(50) DEFAULT 'Librarian',
+  `bio` text DEFAULT NULL,
+  `last_login` timestamp NULL DEFAULT NULL,
   `role` enum('admin','librarian','staff') DEFAULT 'staff',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -207,8 +237,8 @@ CREATE TABLE `users` (
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `username`, `password`, `email`, `full_name`, `role`, `created_at`, `updated_at`) VALUES
-(5, 'admin', '$2y$10$q2lHSzIydpdE8fXWlsqyW.UaMbeZo1yCsvp0Elxx2zlI3oRW.gwBe', 'admin@staff.isatu.edu.ph', 'Larry Denver', 'staff', '2025-08-15 20:03:35', '2025-08-15 20:03:35');
+INSERT INTO `users` (`id`, `username`, `password`, `email`, `full_name`, `phone`, `department`, `position`, `bio`, `last_login`, `role`, `created_at`, `updated_at`) VALUES
+(6, 'admin', '$2y$10$QLNRZRZvGbOAn.uNCnxOpuo8NWywWWna15EVLwb4z532Dndkf2G.2', 'admin@staff.isatu.edu.ph', 'Larry Denver', '+63 091 657 8908', 'Library', 'Librarian', 'fdfgsdfdds', NULL, 'staff', '2025-09-17 07:19:44', '2025-09-17 07:31:15');
 
 --
 -- Indexes for dumped tables
@@ -265,19 +295,19 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `activity_logs`
 --
 ALTER TABLE `activity_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=402;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=420;
 
 --
 -- AUTO_INCREMENT for table `archived_books`
 --
 ALTER TABLE `archived_books`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=40;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
 
 --
 -- AUTO_INCREMENT for table `books`
 --
 ALTER TABLE `books`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=160;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=165;
 
 --
 -- AUTO_INCREMENT for table `borrowing`
@@ -289,7 +319,7 @@ ALTER TABLE `borrowing`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- Constraints for dumped tables
