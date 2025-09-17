@@ -127,7 +127,7 @@ if ($category_filter || $search) {
     $books = mergeBooks($rawBooks);
 }
 
-$page_title = "Library Books - ISAT U Library Miagao Campus";
+$page_title = "Library Books - LibCollect: Reference Mapping System";
 include '../includes/header.php';
 ?>
 

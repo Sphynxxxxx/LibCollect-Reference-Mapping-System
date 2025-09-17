@@ -16,7 +16,7 @@ $isCustom = isset($_GET['custom']);
 $stats = $book->getBookStats();
 $allBooks = $book->getAllBooks();
 
-// Department information with course descriptions
+// Department information with course descriptions - Updated to match database categories
 $departments = [
     'BIT' => [
         'name' => 'Bachelor of Industrial Technology',
@@ -44,10 +44,15 @@ $departments = [
     ]
 ];
 
-// Group books by department
+// Group books by department - Handle multi-context books
 foreach ($allBooks as $bookItem) {
-    if (isset($departments[$bookItem['category']])) {
-        $departments[$bookItem['category']]['books'][] = $bookItem;
+    // Handle multi-context books (books that belong to multiple departments)
+    $categories = explode(',', $bookItem['category']);
+    foreach ($categories as $category) {
+        $category = trim($category);
+        if (isset($departments[$category])) {
+            $departments[$category]['books'][] = $bookItem;
+        }
     }
 }
 
@@ -127,8 +132,8 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         }
 
         .logo-left, .logo-right {
-            width: 80px;
-            height: 80px;
+            width: 100px;
+            height: 100px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -137,13 +142,30 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         }
 
         .logo-left {
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%23FFD700" stroke="%23000" stroke-width="2"/><text x="50" y="55" text-anchor="middle" font-size="12" font-weight="bold">ISAT U</text></svg>') no-repeat center;
+            background: url('../assets/images/ISATU Logo.png') no-repeat center;
             background-size: contain;
         }
 
         .logo-right {
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23FF6B35"/><polygon points="20,70 50,30 80,70" fill="%23FFD700"/><polygon points="30,70 50,45 70,70" fill="%23FF0000"/></svg>') no-repeat center;
+            background: url('../assets/images/Bagong_Pilipinas_logo.png') no-repeat center;
             background-size: contain;
+        }
+
+        /* Print-specific styles for logos */
+        @media print {
+            .logo-left {
+                background: url('../assets/images/ISATU Logo.png') no-repeat center !important;
+                background-size: contain !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .logo-right {
+                background: url('../assets/images/Bagong_Pilipinas_logo.png') no-repeat center;
+                background-size: contain !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
         }
 
         .university-info {
@@ -389,12 +411,31 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                 </thead>
                 <tbody>
                     <?php 
-                    $totalTitles = count($allBooks);
-                    $totalVolumes = array_sum(array_column($allBooks, 'quantity'));
+                    // Calculate totals for summary
+                    $totalTitles = 0;
+                    $totalVolumes = 0;
+                    $deptStats = [];
+                    
+                    // Count unique books per department (handle multi-context books)
+                    foreach ($allBooks as $bookItem) {
+                        $categories = explode(',', $bookItem['category']);
+                        foreach ($categories as $category) {
+                            $category = trim($category);
+                            if (isset($departments[$category])) {
+                                if (!isset($deptStats[$category])) {
+                                    $deptStats[$category] = ['titles' => 0, 'volumes' => 0];
+                                }
+                                $deptStats[$category]['titles']++;
+                                $deptStats[$category]['volumes'] += $bookItem['quantity'];
+                            }
+                        }
+                        $totalTitles++;
+                        $totalVolumes += $bookItem['quantity'];
+                    }
                     
                     foreach ($departments as $code => $dept): 
-                        $titleCount = count($dept['books']);
-                        $volumeCount = array_sum(array_column($dept['books'], 'quantity'));
+                        $titleCount = isset($deptStats[$code]) ? $deptStats[$code]['titles'] : 0;
+                        $volumeCount = isset($deptStats[$code]) ? $deptStats[$code]['volumes'] : 0;
                         $percentage = $totalTitles > 0 ? round(($titleCount / $totalTitles) * 100, 1) : 0;
                     ?>
                     <tr>
@@ -441,13 +482,25 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                     <tbody>
                         <?php 
                         $bookNumber = 1;
-                        foreach ($dept['books'] as $bookItem): 
+                        // Remove duplicates for single department view
+                        $uniqueBooks = [];
+                        foreach ($dept['books'] as $bookItem) {
+                            $bookKey = $bookItem['title'] . '|' . $bookItem['author'];
+                            if (!isset($uniqueBooks[$bookKey])) {
+                                $uniqueBooks[$bookKey] = $bookItem;
+                            } else {
+                                // Add quantities for duplicate books
+                                $uniqueBooks[$bookKey]['quantity'] += $bookItem['quantity'];
+                            }
+                        }
+                        
+                        foreach ($uniqueBooks as $bookItem): 
                         ?>
                         <tr>
                             <td class="call-no"><?php echo str_pad($bookNumber, 3, '0', STR_PAD_LEFT); ?></td>
                             <td class="title"><?php echo htmlspecialchars($bookItem['title']); ?></td>
                             <td class="author"><?php echo htmlspecialchars($bookItem['author']); ?></td>
-                            <td class="copyright"><?php echo date('Y', strtotime($bookItem['created_at'])); ?></td>
+                            <td class="copyright"><?php echo $bookItem['publication_year'] ?? date('Y', strtotime($bookItem['created_at'])); ?></td>
                             <td class="copies"><?php echo $bookItem['quantity']; ?></td>
                         </tr>
                         <?php 
@@ -458,11 +511,11 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                     <tfoot>
                         <tr class="table-footer">
                             <td colspan="4"><strong>Total no. of Titles:</strong></td>
-                            <td class="total-cell"><strong><?php echo count($dept['books']); ?></strong></td>
+                            <td class="total-cell"><strong><?php echo count($uniqueBooks); ?></strong></td>
                         </tr>
                         <tr class="table-footer">
                             <td colspan="4"><strong>Total no. of Volumes:</strong></td>
-                            <td class="total-cell"><strong><?php echo array_sum(array_column($dept['books'], 'quantity')); ?></strong></td>
+                            <td class="total-cell"><strong><?php echo array_sum(array_column($uniqueBooks, 'quantity')); ?></strong></td>
                         </tr>
                     </tfoot>
                 </table>

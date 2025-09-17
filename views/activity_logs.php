@@ -146,7 +146,6 @@ function getActivityIcon($action) {
                             <th>Book</th>
                             <th>User</th>
                             <th>Date & Time</th>
-                            <th>IP Address</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -195,11 +194,7 @@ function getActivityIcon($action) {
                                     <br><small class="text-muted"><?php echo date('g:i A', strtotime($activity['created_at'])); ?></small>
                                 </div>
                             </td>
-                            <td>
-                                <small class="text-muted font-monospace">
-                                    <?php echo htmlspecialchars($activity['ip_address'] ?? 'N/A'); ?>
-                                </small>
-                            </td>
+                        
                         </tr>
                         <?php endforeach; ?>
                     </tbody>

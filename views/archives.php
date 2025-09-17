@@ -321,7 +321,7 @@ $groupOptions = [
     'archive_date' => ['name' => 'Archive Date', 'icon' => 'fas fa-clock']
 ];
 
-$page_title = "Archives - ISAT U Library Miagao Campus";
+$page_title = "Archives - LibCollect: Reference Mapping System";
 include '../includes/header.php';
 ?>
 

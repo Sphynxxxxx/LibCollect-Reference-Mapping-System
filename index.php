@@ -18,6 +18,7 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) >
     header("Location: auth/login.php?message=session_expired&user=" . urlencode($username));
     exit();
 }
+
 // Update last activity time
 $_SESSION['last_activity'] = time();
 

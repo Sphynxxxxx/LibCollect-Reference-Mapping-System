@@ -14,11 +14,26 @@ $database = new Database();
 $pdo = $database->connect();
 $book = new Book($pdo);
 
-// Get report data
-$stats = $book->getBookStats();
-$allBooks = $book->getAllBooks();
+// Get report data with proper error handling
+try {
+    $stats = $book->getBookStats();
+    $allBooks = $book->getAllBooks();
+} catch (Exception $e) {
+    // Fallback to direct database queries if Book class methods fail
+    $statsQuery = "SELECT 
+        COUNT(*) as total_books,
+        SUM(quantity) as total_copies,
+        COUNT(DISTINCT author) as unique_authors
+        FROM books";
+    $stmt = $pdo->query($statsQuery);
+    $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    $allBooksQuery = "SELECT * FROM books ORDER BY created_at DESC";
+    $stmt = $pdo->query($allBooksQuery);
+    $allBooks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
-// Process department data
+// Process department data - updated to match your database categories
 $departments = [
     'BIT' => ['name' => 'Bachelor of Industrial Technology', 'books' => []],
     'EDUCATION' => ['name' => 'Education Department', 'books' => []],
@@ -26,10 +41,14 @@ $departments = [
     'COMPSTUD' => ['name' => 'Computer Studies', 'books' => []]
 ];
 
-// Group books by department
+// Group books by department - handle multi-context categories
 foreach ($allBooks as $bookItem) {
-    if (isset($departments[$bookItem['category']])) {
-        $departments[$bookItem['category']]['books'][] = $bookItem;
+    $categories = explode(',', $bookItem['category']);
+    foreach ($categories as $category) {
+        $category = trim($category);
+        if (isset($departments[$category])) {
+            $departments[$category]['books'][] = $bookItem;
+        }
     }
 }
 
@@ -54,22 +73,102 @@ foreach ($departments as $code => $dept) {
     ];
 }
 
-// Monthly additions for line chart
-$monthlyData = [];
-for ($i = 11; $i >= 0; $i--) {
-    $month = date('M Y', strtotime("-$i months"));
-    $monthlyData[] = [
-        'month' => $month,
-        'books' => rand(5, 25) 
+// Monthly additions for line chart - using actual database data
+$monthlyQuery = "SELECT 
+    DATE_FORMAT(created_at, '%b %Y') as month,
+    DATE_FORMAT(created_at, '%Y-%m') as sort_key,
+    COUNT(*) as books 
+    FROM books 
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+    ORDER BY sort_key ASC";
+
+try {
+    $stmt = $pdo->query($monthlyQuery);
+    $monthlyData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Fill missing months with 0
+    $filledMonthlyData = [];
+    for ($i = 11; $i >= 0; $i--) {
+        $month = date('M Y', strtotime("-$i months"));
+        $sortKey = date('Y-m', strtotime("-$i months"));
+        
+        $found = false;
+        foreach ($monthlyData as $data) {
+            if ($data['sort_key'] === $sortKey) {
+                $filledMonthlyData[] = [
+                    'month' => $month,
+                    'books' => (int)$data['books']
+                ];
+                $found = true;
+                break;
+            }
+        }
+        
+        if (!$found) {
+            $filledMonthlyData[] = [
+                'month' => $month,
+                'books' => 0
+            ];
+        }
+    }
+    $chartData['monthly_additions'] = $filledMonthlyData;
+} catch (Exception $e) {
+    // Fallback to dummy data if query fails
+    $monthlyData = [];
+    for ($i = 11; $i >= 0; $i--) {
+        $month = date('M Y', strtotime("-$i months"));
+        $monthlyData[] = [
+            'month' => $month,
+            'books' => rand(0, 10)
+        ];
+    }
+    $chartData['monthly_additions'] = $monthlyData;
+}
+
+// Author distribution (top 10 authors) - handle multi-context books properly
+$authorQuery = "SELECT 
+    author, 
+    COUNT(*) as book_count,
+    SUM(quantity) as total_copies
+    FROM books 
+    GROUP BY author 
+    ORDER BY book_count DESC 
+    LIMIT 10";
+
+try {
+    $stmt = $pdo->query($authorQuery);
+    $authorData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $chartData['author_distribution'] = $authorData;
+} catch (Exception $e) {
+    $chartData['author_distribution'] = [];
+}
+
+// Get additional statistics
+$additionalStats = [];
+try {
+    // Get archived books count
+    $archivedQuery = "SELECT COUNT(*) as archived_books FROM archived_books";
+    $stmt = $pdo->query($archivedQuery);
+    $additionalStats['archived_books'] = $stmt->fetchColumn();
+    
+    // Get recent additions (last 30 days)
+    $recentQuery = "SELECT COUNT(*) as recent_additions FROM books WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+    $stmt = $pdo->query($recentQuery);
+    $additionalStats['recent_additions'] = $stmt->fetchColumn();
+    
+    // Get multi-context books count
+    $multiContextQuery = "SELECT COUNT(*) as multi_context FROM books WHERE is_multi_context = 1";
+    $stmt = $pdo->query($multiContextQuery);
+    $additionalStats['multi_context'] = $stmt->fetchColumn();
+    
+} catch (Exception $e) {
+    $additionalStats = [
+        'archived_books' => 0,
+        'recent_additions' => 0,
+        'multi_context' => 0
     ];
 }
-$chartData['monthly_additions'] = $monthlyData;
-
-// Author distribution (top 10 authors)
-$authorQuery = "SELECT author, COUNT(*) as book_count FROM books GROUP BY author ORDER BY book_count DESC LIMIT 10";
-$stmt = $pdo->query($authorQuery);
-$authorData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-$chartData['author_distribution'] = $authorData;
 
 // Handle print requests
 $printMode = isset($_GET['print']) ? $_GET['print'] : false;
@@ -82,7 +181,7 @@ if ($printMode) {
 }
 
 // Now set page title and include header
-$page_title = "Reports - ISAT U Library Miagao Campus";
+$page_title = "Reports - LibCollect: Reference Mapping System";
 include '../includes/header.php';
 ?>
 
@@ -155,28 +254,40 @@ include '../includes/header.php';
             </div>
             <div class="card-body">
                 <div class="row text-center">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="stat-item">
-                            <h3 class="text-primary"><?php echo $stats['total_books']; ?></h3>
+                            <h3 class="text-primary"><?php echo isset($stats['total_books']) ? $stats['total_books'] : 0; ?></h3>
                             <p class="text-muted">Total Books</p>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="stat-item">
                             <h3 class="text-success"><?php echo count($departments); ?></h3>
                             <p class="text-muted">Departments</p>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="stat-item">
-                            <h3 class="text-info"><?php echo $stats['total_copies']; ?></h3>
+                            <h3 class="text-info"><?php echo isset($stats['total_copies']) ? $stats['total_copies'] : 0; ?></h3>
                             <p class="text-muted">Total Copies</p>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <div class="stat-item">
                             <h3 class="text-warning"><?php echo count($authorData); ?></h3>
                             <p class="text-muted">Active Authors</p>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="stat-item">
+                            <h3 class="text-secondary"><?php echo $additionalStats['archived_books']; ?></h3>
+                            <p class="text-muted">Archived Books</p>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="stat-item">
+                            <h3 class="text-primary"><?php echo $additionalStats['multi_context']; ?></h3>
+                            <p class="text-muted">Multi-Context</p>
                         </div>
                     </div>
                 </div>
@@ -255,6 +366,9 @@ include '../includes/header.php';
                             <li><a class="dropdown-item" href="export-report.php?type=csv&dept=all&report=statistics">
                                 <i class="fas fa-chart-bar me-2"></i>Export Statistics (CSV)
                             </a></li>
+                            <li><a class="dropdown-item" href="export-report.php?type=csv&dept=all&report=archived">
+                                <i class="fas fa-archive me-2"></i>Export Archived Books (CSV)
+                            </a></li>
                         </ul>
                     </div>
                 </div>
@@ -282,12 +396,51 @@ include '../includes/header.php';
                                 <small class="text-muted">books</small>
                             </div>
                             <div class="progress mt-2" style="height: 5px;">
-                                <div class="progress-bar" style="width: <?php echo ($stats['total_books'] > 0) ? (count($dept['books']) / $stats['total_books'] * 100) : 0; ?>%"></div>
+                                <?php 
+                                $totalBooks = isset($stats['total_books']) && $stats['total_books'] > 0 ? $stats['total_books'] : 1;
+                                $percentage = (count($dept['books']) / $totalBooks) * 100;
+                                ?>
+                                <div class="progress-bar" style="width: <?php echo $percentage; ?>%"></div>
                             </div>
                         </div>
                     </div>
                 </div>
             <?php endforeach; ?>
+        </div>
+        
+        <!-- Recent Activity -->
+        <div class="row">
+            <div class="col-md-12">
+                <h6 class="mb-3">Recent Activity Summary</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Count</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Books Added (Last 30 Days)</td>
+                                <td><?php echo $additionalStats['recent_additions']; ?></td>
+                                <td><?php echo $stats['total_books'] > 0 ? round(($additionalStats['recent_additions'] / $stats['total_books']) * 100, 1) : 0; ?>%</td>
+                            </tr>
+                            <tr>
+                                <td>Multi-Context Books</td>
+                                <td><?php echo $additionalStats['multi_context']; ?></td>
+                                <td><?php echo $stats['total_books'] > 0 ? round(($additionalStats['multi_context'] / $stats['total_books']) * 100, 1) : 0; ?>%</td>
+                            </tr>
+                            <tr>
+                                <td>Archived Books</td>
+                                <td><?php echo $additionalStats['archived_books']; ?></td>
+                                <td><?php echo ($stats['total_books'] + $additionalStats['archived_books']) > 0 ? round(($additionalStats['archived_books'] / ($stats['total_books'] + $additionalStats['archived_books'])) * 100, 1) : 0; ?>%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -310,6 +463,7 @@ include '../includes/header.php';
                                 <option value="summary">Summary Statistics</option>
                                 <option value="category">By Category</option>
                                 <option value="author">By Author</option>
+                                <option value="archived">Archived Books</option>
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
@@ -329,6 +483,8 @@ include '../includes/header.php';
                                 <option value="all">All Time</option>
                                 <option value="current_year">Current Academic Year</option>
                                 <option value="last_year">Previous Academic Year</option>
+                                <option value="last_6_months">Last 6 Months</option>
+                                <option value="last_30_days">Last 30 Days</option>
                                 <option value="custom">Custom Range</option>
                             </select>
                         </div>
@@ -338,7 +494,8 @@ include '../includes/header.php';
                                 <option value="title">Title (A-Z)</option>
                                 <option value="author">Author (A-Z)</option>
                                 <option value="category">Category</option>
-                                <option value="date">Date Added</option>
+                                <option value="created_at">Date Added</option>
+                                <option value="publication_year">Publication Year</option>
                             </select>
                         </div>
                     </div>
@@ -354,6 +511,10 @@ include '../includes/header.php';
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="include_charts">
                             <label class="form-check-label">Include Charts in Report</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="include_context">
+                            <label class="form-check-label">Include Subject/Course Context</label>
                         </div>
                     </div>
                 </form>
@@ -399,6 +560,11 @@ include '../includes/header.php';
 .card-body.p-2 {
     padding: 0.5rem !important;
 }
+
+.table-responsive {
+    max-height: 300px;
+    overflow-y: auto;
+}
 </style>
 
 <!-- Chart.js -->
@@ -413,7 +579,7 @@ const departmentCtx = document.getElementById('departmentChart').getContext('2d'
 new Chart(departmentCtx, {
     type: 'pie',
     data: {
-        labels: chartData.departments.map(d => d.label.split(' ')[0]), // Shorter labels
+        labels: ['BIT', 'Education', 'HBM', 'ComStud'],
         datasets: [{
             data: chartData.departments.map(d => d.value),
             backgroundColor: chartData.departments.map(d => d.color),
@@ -438,7 +604,7 @@ new Chart(departmentCtx, {
                 callbacks: {
                     label: function(context) {
                         const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                        const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
                         return context.parsed + ' (' + percentage + '%)';
                     }
                 }
@@ -452,7 +618,7 @@ const categoryCtx = document.getElementById('categoryChart').getContext('2d');
 new Chart(categoryCtx, {
     type: 'bar',
     data: {
-        labels: ['BIT', 'EDUC', 'HBM', 'CS'], // Shortened labels
+        labels: ['BIT', 'Education', 'HBM', 'ComStud'], 
         datasets: [{
             label: 'Books',
             data: chartData.departments.map(d => d.value),
@@ -514,7 +680,7 @@ new Chart(monthlyCtx, {
             y: {
                 beginAtZero: true,
                 ticks: {
-                    stepSize: 5,
+                    stepSize: 1,
                     font: {
                         size: 9
                     }
@@ -542,7 +708,10 @@ const authorCtx = document.getElementById('authorChart').getContext('2d');
 new Chart(authorCtx, {
     type: 'bar',
     data: {
-        labels: chartData.author_distribution.slice(0, 5).map(d => d.author.split(' ').slice(-1)[0]), // Top 5 only
+        labels: chartData.author_distribution.slice(0, 5).map(d => {
+            const name = d.author.split(' ');
+            return name.length > 1 ? name[name.length - 1] : d.author; // Show last name
+        }),
         datasets: [{
             label: 'Books',
             data: chartData.author_distribution.slice(0, 5).map(d => d.book_count),
@@ -580,8 +749,17 @@ new Chart(authorCtx, {
             tooltip: {
                 callbacks: {
                     title: function(context) {
-                        const fullName = chartData.author_distribution[context[0].dataIndex].author;
-                        return fullName;
+                        if (chartData.author_distribution[context[0].dataIndex]) {
+                            return chartData.author_distribution[context[0].dataIndex].author;
+                        }
+                        return '';
+                    },
+                    afterLabel: function(context) {
+                        if (chartData.author_distribution[context.dataIndex]) {
+                            const copies = chartData.author_distribution[context.dataIndex].total_copies;
+                            return `Total Copies: ${copies}`;
+                        }
+                        return '';
                     }
                 }
             }
@@ -609,6 +787,30 @@ function refreshCharts() {
 
 // Auto-refresh charts every 5 minutes
 setInterval(refreshCharts, 300000);
+
+// Add error handling for missing data
+window.addEventListener('load', function() {
+    // Check if charts rendered properly
+    setTimeout(function() {
+        const charts = document.querySelectorAll('canvas');
+        charts.forEach(function(canvas) {
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                console.warn('Chart context not found for:', canvas.id);
+            }
+        });
+    }, 1000);
+});
+
+// Handle empty data states
+function handleEmptyData() {
+    if (chartData.departments.every(d => d.value === 0)) {
+        document.querySelector('.page-header p').innerHTML = 
+            'No books found in the library. Start by adding some books to generate meaningful reports.';
+    }
+}
+
+handleEmptyData();
 </script>
 
 <?php include '../includes/footer.php'; ?>

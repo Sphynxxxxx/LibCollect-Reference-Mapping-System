@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-// If $pdo is still not defined, create a direct connection
 if (!isset($pdo) || $pdo === null) {
     try {
         $host = 'localhost';
@@ -259,7 +258,7 @@ if ($debug_mode) {
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+            background: #ffb347;
             border: none;
             border-radius: 10px;
             padding: 12px 30px;
@@ -395,7 +394,7 @@ if ($debug_mode) {
                         </div>
                         
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-sign-in-alt me-2"></i>Login
+                            <i></i>Login
                         </button>
                     </form>
                     

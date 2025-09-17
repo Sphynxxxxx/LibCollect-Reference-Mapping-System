@@ -1,10 +1,8 @@
 <?php
-// Only start session if it hasn't been started already
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Determine if we're in the root directory or views directory
 $currentDir = dirname($_SERVER['SCRIPT_FILENAME']);
 $isInViews = (basename($currentDir) === 'views');
 
@@ -68,7 +66,7 @@ if (!class_exists('Database')) {
                         Admin
                     </button>
                     <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Profile</a></li>
+                        <li><a class="dropdown-item" href="<?php echo $isInViews ? '' : 'views/'; ?>profiles.php"><i class="fas fa-user me-2"></i>Profile</a></li>
                         <li><a class="dropdown-item" href="<?php echo $isInViews ? '../' : ''; ?>auth/logout.php"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
                     </ul>
                 </div>

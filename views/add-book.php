@@ -184,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Now set page title and include header
-$page_title = "Add Book - ISAT U Library Miagao Campus";
+$page_title = "Add Book - LibCollect: Reference Mapping System";
 include '../includes/header.php';
 ?>
 
@@ -395,13 +395,94 @@ include '../includes/header.php';
                         <h6 class="text-warning mb-3"><i class="fas fa-archive me-2"></i>Archive This Book</h6>
                         <div class="alert alert-warning">
                             <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>This book is 5+ years old.</strong> Please provide a reason for archiving it instead of adding to the active collection.
+                            <strong>This book is 5+ years old.</strong> Please select a reason for archiving it instead of adding to the active collection.
                         </div>
+                        
                         <div class="mb-3">
                             <label class="form-label">Archive Reason *</label>
-                            <textarea class="form-control" name="archive_reason" id="archiveReason" rows="3" 
-                                    placeholder="Explain why this book should be archived (e.g., outdated content, new edition available, etc.)"></textarea>
-                            <small class="text-muted">Required for books published 5+ years ago</small>
+                            <div class="border rounded p-3 bg-light">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Donated" id="reason_donated">
+                                            <label class="form-check-label" for="reason_donated">
+                                                <i class="fas fa-hands-helping text-success me-1"></i>Donated
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Outdated" id="reason_outdated">
+                                            <label class="form-check-label" for="reason_outdated">
+                                                <i class="fas fa-calendar-times text-warning me-1"></i>Outdated
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Obsolete" id="reason_obsolete">
+                                            <label class="form-check-label" for="reason_obsolete">
+                                                <i class="fas fa-ban text-secondary me-1"></i>Obsolete
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Damaged" id="reason_damaged">
+                                            <label class="form-check-label" for="reason_damaged">
+                                                <i class="fas fa-exclamation-triangle text-danger me-1"></i>Damaged
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Lost" id="reason_lost">
+                                            <label class="form-check-label" for="reason_lost">
+                                                <i class="fas fa-search text-muted me-1"></i>Lost
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Low usage" id="reason_low_usage">
+                                            <label class="form-check-label" for="reason_low_usage">
+                                                <i class="fas fa-chart-line text-info me-1"></i>Low usage
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Availability of more recent edition" id="reason_recent_edition">
+                                            <label class="form-check-label" for="reason_recent_edition">
+                                                <i class="fas fa-sync-alt text-primary me-1"></i>Availability of more recent edition
+                                            </label>
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Title ceased publication" id="reason_ceased">
+                                            <label class="form-check-label" for="reason_ceased">
+                                                <i class="fas fa-stop-circle text-dark me-1"></i>Title ceased publication
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Others option with custom text input -->
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="custom" id="reason_others">
+                                    <label class="form-check-label" for="reason_others">
+                                        <i class="fas fa-edit text-secondary me-1"></i>Others:
+                                    </label>
+                                </div>
+                                
+                                <!-- Custom reason text area (hidden by default) -->
+                                <div class="mt-3" id="customReasonSection" style="display: none;">
+                                    <label for="customArchiveReason" class="form-label small text-muted">
+                                        <i class="fas fa-pencil-alt me-1"></i>Please specify the reason:
+                                    </label>
+                                    <textarea class="form-control form-control-sm" 
+                                            id="customArchiveReason" 
+                                            name="custom_archive_reason" 
+                                            rows="2" 
+                                            placeholder="Enter your custom archive reason here..."
+                                            maxlength="200"></textarea>
+                                    <small class="text-muted">Maximum 200 characters</small>
+                                    <div class="small text-muted mt-1" id="customReasonCounter">0/200 characters</div>
+                                </div>
+                            </div>
+                            <small class="text-muted mt-2 d-block">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Required for books published 5+ years ago. This helps maintain proper library records.
+                            </small>
                         </div>
                     </div>
 
@@ -489,8 +570,98 @@ include '../includes/header.php';
 </div>
 
 <script>
-// Form validation and enhancement
+// Handle archive reason selection and custom input
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('archive-reason-radio')) {
+        const customSection = document.getElementById('customReasonSection');
+        const customTextArea = document.getElementById('customArchiveReason');
+        
+        if (e.target.value === 'custom') {
+            // Show custom input section
+            customSection.style.display = 'block';
+            customTextArea.setAttribute('required', 'required');
+            customSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            // Hide custom input section
+            customSection.style.display = 'none';
+            customTextArea.removeAttribute('required');
+            customTextArea.value = '';
+        }
+        
+        // Update the visual feedback
+        const selectedLabel = e.target.nextElementSibling;
+        const allLabels = document.querySelectorAll('.archive-reason-radio + label');
+        
+        // Reset all labels
+        allLabels.forEach(label => {
+            label.classList.remove('text-primary', 'fw-bold');
+        });
+        
+        // Highlight selected label
+        if (selectedLabel) {
+            selectedLabel.classList.add('text-primary', 'fw-bold');
+        }
+    }
+});
+
+// Character counter for custom archive reason
+document.addEventListener('DOMContentLoaded', function() {
+    const customArchiveReason = document.getElementById('customArchiveReason');
+    if (customArchiveReason) {
+        customArchiveReason.addEventListener('input', function() {
+            const maxLength = 200;
+            const currentLength = this.value.length;
+            const counter = document.getElementById('customReasonCounter');
+            
+            if (counter) {
+                counter.textContent = `${currentLength}/${maxLength} characters`;
+                
+                if (currentLength > maxLength) {
+                    counter.className = 'small text-danger mt-1';
+                    this.classList.add('is-invalid');
+                } else if (currentLength > 160) {
+                    counter.className = 'small text-warning mt-1';
+                    this.classList.remove('is-invalid');
+                    this.classList.add('is-valid');
+                } else {
+                    counter.className = 'small text-muted mt-1';
+                    this.classList.remove('is-invalid', 'is-valid');
+                }
+            }
+        });
+    }
+});
+
+// Form validation and enhancement (updated to handle archive reason checklist)
 document.getElementById('addBookForm').addEventListener('submit', function(e) {
+    const archiveSection = document.getElementById('archiveSection');
+    
+    // If archive section is visible, validate archive reason selection
+    if (archiveSection && archiveSection.style.display !== 'none') {
+        const selectedReason = document.querySelector('input[name="archive_reason"]:checked');
+        
+        if (!selectedReason) {
+            e.preventDefault();
+            alert('Please select an archive reason for this book.');
+            return false;
+        }
+        
+        // If "Others" is selected, validate custom reason
+        if (selectedReason.value === 'custom') {
+            const customReason = document.getElementById('customArchiveReason').value.trim();
+            if (!customReason) {
+                e.preventDefault();
+                alert('Please provide a custom archive reason.');
+                document.getElementById('customArchiveReason').focus();
+                return false;
+            }
+            
+            // Update the form to send the custom reason as the archive_reason
+            selectedReason.value = customReason;
+        }
+    }
+    
+    // Continue with existing validation...
     const title = document.querySelector('input[name="title"]').value.trim();
     const author = document.querySelector('input[name="author"]').value.trim();
     const categories = document.querySelectorAll('input[name="category[]"]:checked');
@@ -683,7 +854,7 @@ function generateISBNFields() {
     });
 }
 
-// Function to check if book should be archived and show/hide archive section
+// Updated checkArchiveStatus function to handle the new checklist UI
 function checkArchiveStatus() {
     const publicationYear = document.getElementById('publicationYear').value;
     const currentYear = new Date().getFullYear();
@@ -691,10 +862,28 @@ function checkArchiveStatus() {
     
     if (publicationYear && (currentYear - parseInt(publicationYear)) >= 5) {
         archiveSection.style.display = 'block';
-        document.getElementById('archiveReason').setAttribute('required', 'required');
+        // Reset any previously selected archive reasons
+        document.querySelectorAll('.archive-reason-radio').forEach(radio => {
+            radio.checked = false;
+        });
+        const customSection = document.getElementById('customReasonSection');
+        const customTextArea = document.getElementById('customArchiveReason');
+        if (customSection) customSection.style.display = 'none';
+        if (customTextArea) customTextArea.value = '';
+        
+        // Reset label styles
+        const allLabels = document.querySelectorAll('.archive-reason-radio + label');
+        allLabels.forEach(label => {
+            label.classList.remove('text-primary', 'fw-bold');
+        });
     } else {
         archiveSection.style.display = 'none';
-        document.getElementById('archiveReason').removeAttribute('required');
+        // Clear any selected archive reasons
+        document.querySelectorAll('.archive-reason-radio').forEach(radio => {
+            radio.checked = false;
+        });
+        const customSection = document.getElementById('customReasonSection');
+        if (customSection) customSection.style.display = 'none';
     }
 }
 
@@ -732,6 +921,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set current year as default for publication year
     const currentYear = new Date().getFullYear();
     document.getElementById('publicationYear').setAttribute('placeholder', `e.g., ${currentYear}`);
+    
+    // Add helpful tooltips to checkboxes
+    const checkboxGroups = {
+        'category[]': 'Books will be available to all selected departments',
+        'year_level[]': 'Books will be suitable for all selected year levels',
+        'semester[]': 'Books will be available during all selected semesters'
+    };
+    
+    Object.keys(checkboxGroups).forEach(name => {
+        const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
+        checkboxes.forEach(checkbox => {
+            checkbox.setAttribute('title', checkboxGroups[name]);
+        });
+    });
 });
 
 // Character counter for description
@@ -790,20 +993,36 @@ document.getElementById('publicationYear').addEventListener('input', function() 
     }
 });
 
-// Reset form handler
+// Updated reset form handler to handle archive reason checkboxes
 document.querySelector('button[type="reset"]').addEventListener('click', function() {
+    // Reset archive reason selections
+    document.querySelectorAll('.archive-reason-radio').forEach(radio => {
+        radio.checked = false;
+    });
+    const customSection = document.getElementById('customReasonSection');
+    const customTextArea = document.getElementById('customArchiveReason');
+    if (customSection) customSection.style.display = 'none';
+    if (customTextArea) customTextArea.value = '';
+    
+    // Reset label styles
+    const allLabels = document.querySelectorAll('.archive-reason-radio + label');
+    allLabels.forEach(label => {
+        label.classList.remove('text-primary', 'fw-bold');
+    });
+    
+    // Hide archive section
+    const archiveSection = document.getElementById('archiveSection');
+    if (archiveSection) archiveSection.style.display = 'none';
+    
+    // Continue with existing reset functionality...
     document.getElementById('previewSection').style.display = 'none';
-    // Clear all checkboxes
     document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-    // Reset same book toggle
     document.getElementById('sameBookToggle').checked = true;
-    // Clear publication year validation
     document.getElementById('publicationYear').classList.remove('is-invalid', 'is-valid');
     const existingMsg = document.querySelector('.year-validation');
     if (existingMsg) {
         existingMsg.remove();
     }
-    // Regenerate ISBN fields
     setTimeout(generateISBNFields, 100);
 });
 
@@ -885,23 +1104,6 @@ document.addEventListener('change', function(e) {
             });
         }
     }
-});
-
-// Add context explanation tooltip
-document.addEventListener('DOMContentLoaded', function() {
-    // Add helpful tooltips to checkboxes
-    const checkboxGroups = {
-        'category[]': 'Books will be available to all selected departments',
-        'year_level[]': 'Books will be suitable for all selected year levels',
-        'semester[]': 'Books will be available during all selected semesters'
-    };
-    
-    Object.keys(checkboxGroups).forEach(name => {
-        const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
-        checkboxes.forEach(checkbox => {
-            checkbox.setAttribute('title', checkboxGroups[name]);
-        });
-    });
 });
 
 // Visual feedback for multi-selection
