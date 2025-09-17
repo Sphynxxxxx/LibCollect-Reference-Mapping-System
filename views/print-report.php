@@ -386,9 +386,9 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         </div>
 
         <?php if ($department !== 'summary'): ?>
-        <div class="semester-info">
+        <!--<div class="semester-info">
             <strong>First Year - First Semester</strong>
-        </div>
+        </div>-->
         <?php endif; ?>
     </div>
 
