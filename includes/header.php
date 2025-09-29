@@ -40,11 +40,11 @@ if (!class_exists('Database')) {
 </head>
 <body>
     <!-- University Header -->
-    <div class="university-header">
+    <!--<div class="university-header">
         <div class="container-fluid">
             <strong>Iloilo Science and Technology University Miagao Campus</strong> - LibCollect: Reference Mapping System
         </div>
-    </div>
+    </div>-->
 
     <?php include $sidebarPath; ?>
 
