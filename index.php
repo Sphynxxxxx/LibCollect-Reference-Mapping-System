@@ -22,7 +22,7 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) >
 // Update last activity time
 $_SESSION['last_activity'] = time();
 
-$page_title = "Dashboard - LibCollect: Reference Mapping System";
+$page_title = "LibCollect: Reference Mapping System - Dashboard";
 include 'includes/header.php';
 include 'classes/Book.php';
 

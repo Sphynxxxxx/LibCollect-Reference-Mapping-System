@@ -1,5 +1,5 @@
 <?php
-$page_title = "Categories - LibCollect: Reference Mapping System";
+$page_title = "LibCollect: Reference Mapping System - Categories";
 include '../includes/header.php';
 include '../classes/Book.php';
 

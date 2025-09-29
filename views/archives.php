@@ -321,7 +321,7 @@ $groupOptions = [
     'archive_date' => ['name' => 'Archive Date', 'icon' => 'fas fa-clock']
 ];
 
-$page_title = "Archives - LibCollect: Reference Mapping System";
+$page_title = "LibCollect: Reference Mapping System - Archives";
 include '../includes/header.php';
 ?>
 
@@ -342,7 +342,7 @@ include '../includes/header.php';
 
 .book-cover {
     position: relative;
-    background: linear-gradient(135deg, #d4af37 0%, #ffd700 50%, #b8860b 100%);
+    background: #ffd700;
     height: 180px;
     display: flex;
     flex-direction: column;
@@ -359,7 +359,7 @@ include '../includes/header.php';
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, #d4af37 0%, #ffd700 50%, #b8860b 100%);
+    background: #ffd700;
 }
 
 .book-spine {
@@ -466,7 +466,7 @@ include '../includes/header.php';
 }
 
 .eligible-cover {
-    background: linear-gradient(145deg, #f39c12 0%, #d35400 100%) !important;
+    background: #f39c12 !important;
 }
 
 .book-details {
@@ -572,19 +572,19 @@ include '../includes/header.php';
 
 /* Different gradients for different departments */
 .book-card[data-department="BIT"] .book-cover {
-    background: linear-gradient(145deg, #667eea 0%, #764ba2 100%);
+    background: #ffc107;
 }
 
 .book-card[data-department="EDUCATION"] .book-cover {
-    background: linear-gradient(145deg, #11998e 0%, #38ef7d 100%);
+    background: #0d6efd;
 }
 
 .book-card[data-department="HBM"] .book-cover {
-    background: linear-gradient(145deg, #3498db 0%, #2980b9 100%);
+    background: #dc3545;
 }
 
 .book-card[data-department="COMPSTUD"] .book-cover {
-    background: linear-gradient(145deg, #f39c12 0%, #d35400 100%);
+    background: #212529;
 }
 
 /* Archive-specific overrides */
@@ -597,7 +597,7 @@ include '../includes/header.php';
 }
 
 .stats-card {
-    background: linear-gradient(135deg, #d4af37 0%, #ffd700 50%, #b8860b 100%);
+    background: #ffd700;
     color: white;
     border: none;
 }

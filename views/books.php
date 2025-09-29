@@ -127,7 +127,7 @@ if ($category_filter || $search) {
     $books = mergeBooks($rawBooks);
 }
 
-$page_title = "Library Books - LibCollect: Reference Mapping System";
+$page_title = "LibCollect: Reference Mapping System - Library Books";
 include '../includes/header.php';
 ?>
 
@@ -160,7 +160,7 @@ include '../includes/header.php';
 }
 
 .search-section {
-    background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+    background: #ffd700;
     color: white;
     padding: 2rem 0;
     margin-bottom: 2rem;

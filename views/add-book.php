@@ -184,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Now set page title and include header
-$page_title = "Add Book - LibCollect: Reference Mapping System";
+$page_title = "LibCollect: Reference Mapping System - Add Book";
 include '../includes/header.php';
 ?>
 

@@ -181,7 +181,7 @@ if ($printMode) {
 }
 
 // Now set page title and include header
-$page_title = "Reports - LibCollect: Reference Mapping System";
+$page_title = "LibCollect: Reference Mapping System - Reports";
 include '../includes/header.php';
 ?>
 

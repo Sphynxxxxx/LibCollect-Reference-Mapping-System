@@ -49,12 +49,12 @@ $viewsPath = $isInViews ? '' : 'views/';
                     <span class="nav-text">Archives</span>
                 </a>
             </li>
-            <li class="nav-item">
+            <!--<li class="nav-item">
                 <a class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'edit-book.php') ? 'active' : ''; ?>" href="<?php echo $viewsPath; ?>edit-book.php">
                     <i class="fas fa-edit"></i>
                     <span class="nav-text">Edit Book</span>
                 </a>
-            </li>
+            </li>-->
             <li class="nav-item">
                 <a class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'reports.php') ? 'active' : ''; ?>" href="<?php echo $viewsPath; ?>reports.php">
                     <i class="fas fa-chart-bar"></i>

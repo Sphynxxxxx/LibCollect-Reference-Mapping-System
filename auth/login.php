@@ -338,9 +338,8 @@ if ($debug_mode) {
             <div class="col-md-6">
                 <div class="login-container">
                     <div class="logo-section">
-                        <i class="fas fa-sign-in-alt"></i>
-                        <h2>Welcome Back</h2>
-                        <p>ISAT U LibCollect: Reference Mapping System</p>
+
+                        <h2>ISAT U LibCollect: Reference Mapping System</h2>
                     </div>
                     
                     <?php if ($debug_mode && $debug_info): ?>
