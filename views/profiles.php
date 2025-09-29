@@ -189,10 +189,9 @@ include '../includes/header.php';
                                    value="<?php echo htmlspecialchars($user['email']); ?>" required>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Phone Number</label>
-                            <input type="tel" class="form-control" name="phone" 
-                                   value="<?php echo htmlspecialchars($user['phone']); ?>"
-                                   placeholder="+63 XXX XXX XXXX">
+                            <label class="form-label">Position</label>
+                            <input type="text" class="form-control" name="position" 
+                                   value="Librarian" readonly style="background-color: #f8f9fa;">
                         </div>
                     </div>
                     
@@ -202,19 +201,8 @@ include '../includes/header.php';
                             <input type="text" class="form-control" name="department" 
                                    value="Library" readonly style="background-color: #f8f9fa;">
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Position</label>
-                            <input type="text" class="form-control" name="position" 
-                                   value="Librarian" readonly style="background-color: #f8f9fa;">
-                        </div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Bio/Description</label>
-                        <textarea class="form-control" name="bio" rows="3" 
-                                  placeholder="Tell us about yourself..."><?php echo htmlspecialchars($user['bio']); ?></textarea>
-                        <small class="text-muted">Maximum 500 characters</small>
-                    </div>
+                
                     
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
