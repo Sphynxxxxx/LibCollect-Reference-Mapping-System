@@ -19,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $_SESSION['message_type'] = 'danger';
                 }
                 break;
+                
             case 'delete_multiple':
                 $deleted_count = 0;
                 if (isset($_POST['ids']) && is_array($_POST['ids'])) {
@@ -33,6 +34,120 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $_SESSION['message_type'] = 'success';
                 } else {
                     $_SESSION['message'] = 'Failed to delete books!';
+                    $_SESSION['message_type'] = 'danger';
+                }
+                break;
+                
+            case 'send_to_pending':
+                // Move book to pending archives
+                if (isset($_POST['id'])) {
+                    // Get book data
+                    $stmt = $pdo->prepare("SELECT * FROM books WHERE id = ?");
+                    $stmt->execute([$_POST['id']]);
+                    $bookData = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($bookData) {
+                        try {
+                            // Insert into pending_archives
+                            $sql = "INSERT INTO pending_archives (title, author, isbn, category, quantity, description, 
+                                    subject_name, semester, section, year_level, course_code, publication_year, 
+                                    book_copy_number, total_quantity, is_multi_context, same_book_series) 
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                            
+                            $stmt = $pdo->prepare($sql);
+                            $result = $stmt->execute([
+                                $bookData['title'],
+                                $bookData['author'],
+                                $bookData['isbn'],
+                                $bookData['category'],
+                                $bookData['quantity'],
+                                $bookData['description'],
+                                $bookData['subject_name'],
+                                $bookData['semester'],
+                                $bookData['section'],
+                                $bookData['year_level'],
+                                $bookData['course_code'],
+                                $bookData['publication_year'],
+                                $bookData['book_copy_number'] ?? 1,
+                                $bookData['total_quantity'] ?? 1,
+                                $bookData['is_multi_context'] ?? 0,
+                                $bookData['same_book_series'] ?? 0
+                            ]);
+                            
+                            if ($result) {
+                                // Delete from books table
+                                $book->deleteBook($_POST['id']);
+                                
+                                $_SESSION['message'] = 'Book sent to Pending Archives! Visit Archives page to select archive reason.';
+                                $_SESSION['message_type'] = 'info';
+                            } else {
+                                $_SESSION['message'] = 'Failed to move book to pending archives!';
+                                $_SESSION['message_type'] = 'danger';
+                            }
+                        } catch (PDOException $e) {
+                            error_log("Error moving to pending archives: " . $e->getMessage());
+                            $_SESSION['message'] = 'Failed to move book to pending archives!';
+                            $_SESSION['message_type'] = 'danger';
+                        }
+                    }
+                }
+                break;
+                
+            case 'send_multiple_to_pending':
+                // Move multiple books to pending archives
+                $archived_count = 0;
+                if (isset($_POST['ids']) && is_array($_POST['ids'])) {
+                    foreach ($_POST['ids'] as $id) {
+                        // Get book data
+                        $stmt = $pdo->prepare("SELECT * FROM books WHERE id = ?");
+                        $stmt->execute([$id]);
+                        $bookData = $stmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        if ($bookData) {
+                            try {
+                                // Insert into pending_archives
+                                $sql = "INSERT INTO pending_archives (title, author, isbn, category, quantity, description, 
+                                        subject_name, semester, section, year_level, course_code, publication_year, 
+                                        book_copy_number, total_quantity, is_multi_context, same_book_series) 
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                
+                                $stmt = $pdo->prepare($sql);
+                                $result = $stmt->execute([
+                                    $bookData['title'],
+                                    $bookData['author'],
+                                    $bookData['isbn'],
+                                    $bookData['category'],
+                                    $bookData['quantity'],
+                                    $bookData['description'],
+                                    $bookData['subject_name'],
+                                    $bookData['semester'],
+                                    $bookData['section'],
+                                    $bookData['year_level'],
+                                    $bookData['course_code'],
+                                    $bookData['publication_year'],
+                                    $bookData['book_copy_number'] ?? 1,
+                                    $bookData['total_quantity'] ?? 1,
+                                    $bookData['is_multi_context'] ?? 0,
+                                    $bookData['same_book_series'] ?? 0
+                                ]);
+                                
+                                if ($result) {
+                                    // Delete from books table
+                                    $book->deleteBook($id);
+                                    $archived_count++;
+                                }
+                            } catch (PDOException $e) {
+                                error_log("Error moving to pending archives: " . $e->getMessage());
+                            }
+                        }
+                    }
+                }
+                
+                if ($archived_count > 0) {
+                    $_SESSION['message'] = "Successfully sent {$archived_count} book(s) to Pending Archives! Visit Archives page to select archive reasons.";
+                    $_SESSION['message_type'] = 'info';
+                } else {
+                    $_SESSION['message'] = 'Failed to move books to pending archives!';
                     $_SESSION['message_type'] = 'danger';
                 }
                 break;
@@ -834,7 +949,7 @@ include '../includes/header.php';
                                             <!-- Multiple records - show dropdown -->
                                             <div class="btn-group w-100" role="group">
                                                 <a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
-                                                   class="btn btn-outline-info btn-sm">
+                                                class="btn btn-outline-info btn-sm">
                                                     <i class="fas fa-eye me-1"></i>View
                                                 </a>
                                                 <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle dropdown-toggle-split" 
@@ -852,8 +967,14 @@ include '../includes/header.php';
                                                     <?php endforeach; ?>
                                                     <li><hr class="dropdown-divider"></li>
                                                     <li>
+                                                        <a class="dropdown-item text-warning" href="#" 
+                                                        onclick="event.preventDefault(); confirmArchiveAll([<?php echo implode(',', $book_item['record_ids']); ?>], '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
+                                                            <i class="fas fa-archive me-2"></i>Archive All Records
+                                                        </a>
+                                                    </li>
+                                                    <li>
                                                         <a class="dropdown-item text-danger" href="#" 
-                                                           onclick="confirmDeleteAll([<?php echo implode(',', $book_item['record_ids']); ?>], '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
+                                                        onclick="event.preventDefault(); confirmDeleteAll([<?php echo implode(',', $book_item['record_ids']); ?>], '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
                                                             <i class="fas fa-trash me-2"></i>Delete All Records
                                                         </a>
                                                     </li>
@@ -863,13 +984,18 @@ include '../includes/header.php';
                                             <!-- Single record - regular buttons -->
                                             <div class="d-grid gap-1">
                                                 <a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
-                                                   class="btn btn-outline-info btn-sm">
+                                                class="btn btn-outline-info btn-sm">
                                                     <i class="fas fa-eye me-1"></i>View Details
                                                 </a>
                                                 <a href="edit-book.php?id=<?php echo $book_item['id']; ?>" 
-                                                   class="btn btn-outline-primary btn-sm">
+                                                class="btn btn-outline-primary btn-sm">
                                                     <i class="fas fa-edit me-1"></i>Edit
                                                 </a>
+                                                <button type="button" 
+                                                        class="btn btn-outline-warning btn-sm" 
+                                                        onclick="confirmArchive(<?php echo $book_item['id']; ?>, '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
+                                                    <i class="fas fa-archive me-1"></i>Archive
+                                                </button>
                                                 <button type="button" 
                                                         class="btn btn-outline-danger btn-sm" 
                                                         onclick="confirmDelete(<?php echo $book_item['id']; ?>, '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>', deleteBook)">
@@ -887,6 +1013,42 @@ include '../includes/header.php';
         </div>
     </div>
 <?php endif; ?>
+
+<!-- Archive Modal -->
+<div class="modal fade" id="archiveModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="fas fa-archive me-2"></i>Archive Book
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>Note:</strong> This book will be moved to Pending Archives where you can select an archive reason.
+                </div>
+                
+                <p>Are you sure you want to archive this book?</p>
+                <div class="alert alert-warning">
+                    <strong id="archiveBookTitle"></strong>
+                </div>
+                <small class="text-muted">The book will remain searchable and can be restored anytime from Archives.</small>
+                
+                <form id="archiveBookForm" method="POST">
+                    <input type="hidden" name="action" value="send_to_pending">
+                    <input type="hidden" name="id" id="archiveBookId">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirmArchiveBtn">
+                    <i class="fas fa-archive me-1"></i>Send to Pending Archives
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Enhanced Delete Confirmation Modal -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
@@ -919,6 +1081,7 @@ include '../includes/header.php';
 <script>
 let deleteBookId = null;
 let deleteCallback = null;
+let archiveBookId = null;
 
 function confirmDelete(id, title, callback) {
     deleteBookId = id;
@@ -935,9 +1098,30 @@ function confirmDeleteAll(ids, title) {
     }
 }
 
+function confirmArchive(id, title) {
+    archiveBookId = id;
+    document.getElementById('archiveBookTitle').textContent = title;
+    document.getElementById('archiveBookId').value = id;
+    
+    const modal = new bootstrap.Modal(document.getElementById('archiveModal'));
+    modal.show();
+}
+
+function confirmArchiveAll(ids, title) {
+    if (confirm(`Are you sure you want to send all ${ids.length} records of "${title}" to Pending Archives?\n\nYou'll need to select archive reasons in the Archives page.`)) {
+        archiveMultipleBooks(ids);
+    }
+}
+
 document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
     if (deleteBookId && deleteCallback) {
         deleteCallback(deleteBookId);
+    }
+});
+
+document.getElementById('confirmArchiveBtn').addEventListener('click', function() {
+    if (archiveBookId) {
+        document.getElementById('archiveBookForm').submit();
     }
 });
 
@@ -959,6 +1143,21 @@ function deleteMultipleBooks(ids) {
     form.method = 'POST';
     
     let inputs = '<input type="hidden" name="action" value="delete_multiple">';
+    ids.forEach(id => {
+        inputs += `<input type="hidden" name="ids[]" value="${id}">`;
+    });
+    
+    form.innerHTML = inputs;
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function archiveMultipleBooks(ids) {
+    // Create a form to archive multiple books
+    const form = document.createElement('form');
+    form.method = 'POST';
+    
+    let inputs = '<input type="hidden" name="action" value="send_multiple_to_pending">';
     ids.forEach(id => {
         inputs += `<input type="hidden" name="ids[]" value="${id}">`;
     });

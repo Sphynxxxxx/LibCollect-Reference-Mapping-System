@@ -11,9 +11,6 @@ $book = new Book($pdo);
 
 // Handle form submission BEFORE any HTML output
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Check if this is an archive action
-    $is_archive_action = isset($_POST['archive_reason']) && !empty($_POST['archive_reason']);
-    
     // Handle multiple selections
     $categories = isset($_POST['category']) ? $_POST['category'] : [];
     $year_levels = isset($_POST['year_level']) ? $_POST['year_level'] : [];
@@ -25,17 +22,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     $success_count = 0;
     $error_count = 0;
-    $archived_count = 0; // Track archived books
+    $pending_count = 0; // Changed from archived_count to pending_count
     $total_quantity = $_POST['quantity'];
-    
-    // Get archive reason if provided
-    $archive_reason = isset($_POST['archive_reason']) ? $_POST['archive_reason'] : '';
     
     // Handle ISBN data - could be single ISBN or array of ISBNs
     $isbn_data = [];
     if (isset($_POST['isbn'])) {
         if (is_array($_POST['isbn'])) {
-            $isbn_data = array_filter($_POST['isbn']); // Remove empty ISBNs
+            $isbn_data = array_filter($_POST['isbn']);
         } else {
             $isbn_data = [$_POST['isbn']];
         }
@@ -44,22 +38,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Determine how to handle the books
     $same_book = isset($_POST['same_book']) && $_POST['same_book'] === 'true';
     $unique_isbns = array_unique(array_filter($isbn_data));
-    $unique_book_count = count($unique_isbns);
     
-    // Check if book should be archived (5+ years old)
+    // Check if book should go to pending archives (5+ years old)
     $publication_year = $_POST['publication_year'] ?? null;
     $current_year = date('Y');
-    $should_archive = false;
-    $archive_reason_display = '';
+    $should_pending_archive = false;
     
     if ($publication_year && ($current_year - $publication_year) >= 5) {
-        $should_archive = true;
-        $archive_reason_display = "Publication year: $publication_year (5+ years old)";
-        
-        // If archive reason was provided, use it
-        if (!empty($archive_reason)) {
-            $archive_reason_display = $archive_reason;
-        }
+        $should_pending_archive = true;
     }
     
     // Create book records - ONE record per physical book copy
@@ -67,10 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Determine ISBN for this book copy
         $current_isbn = '';
         if ($same_book && !empty($unique_isbns)) {
-            // All books have the same ISBN (first unique ISBN)
             $current_isbn = $unique_isbns[0];
         } else if (!empty($isbn_data)) {
-            // Use specific ISBN for this book index (cycle through if needed)
             $isbn_index = $i % count($isbn_data);
             $current_isbn = $isbn_data[$isbn_index];
         }
@@ -86,28 +70,56 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             'title' => $_POST['title'],
             'author' => $_POST['author'],
             'isbn' => $current_isbn,
-            'category' => $categories_str, // Store as comma-separated string
-            'quantity' => 1, // Each record represents 1 physical book
+            'category' => $categories_str,
+            'quantity' => 1,
             'description' => $_POST['description'],
             'subject_name' => $_POST['subject_name'] ?? '',
-            'semester' => $semesters_str, // Store as comma-separated string
-            'section' => $sections_str, // Store as comma-separated string
-            'year_level' => $year_levels_str, // Store as comma-separated string
+            'semester' => $semesters_str,
+            'section' => $sections_str,
+            'year_level' => $year_levels_str,
             'course_code' => $_POST['course_code'] ?? '',
             'publication_year' => $publication_year,
-            'book_copy_number' => $i + 1, // Track which copy this is
-            'total_quantity' => $total_quantity, // Reference to total
+            'book_copy_number' => $i + 1,
+            'total_quantity' => $total_quantity,
             'is_multi_context' => (count($categories) > 1 || count($year_levels) > 1 || count($semesters) > 1 || count($sections) > 1) ? 1 : 0,
             'same_book_series' => $same_book ? 1 : 0
         ];
         
-        // If book should be archived and user provided a reason, archive it
-        if ($should_archive && !empty($archive_reason)) {
-            $result = $book->archiveBook($data, $archive_reason, $_SESSION['user_name'] ?? 'System');
-            
-            if ($result) {
-                $archived_count++;
-            } else {
+        // If book is 5+ years old, add to PENDING archives (not directly to archived_books)
+        if ($should_pending_archive) {
+            try {
+                $sql = "INSERT INTO pending_archives (title, author, isbn, category, quantity, description, 
+                        subject_name, semester, section, year_level, course_code, publication_year, 
+                        book_copy_number, total_quantity, is_multi_context, same_book_series) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                
+                $stmt = $pdo->prepare($sql);
+                $result = $stmt->execute([
+                    $data['title'],
+                    $data['author'],
+                    $data['isbn'],
+                    $data['category'],
+                    $data['quantity'],
+                    $data['description'],
+                    $data['subject_name'],
+                    $data['semester'],
+                    $data['section'],
+                    $data['year_level'],
+                    $data['course_code'],
+                    $data['publication_year'],
+                    $data['book_copy_number'],
+                    $data['total_quantity'],
+                    $data['is_multi_context'],
+                    $data['same_book_series']
+                ]);
+                
+                if ($result) {
+                    $pending_count++;
+                } else {
+                    $error_count++;
+                }
+            } catch (PDOException $e) {
+                error_log("Error adding to pending archives: " . $e->getMessage());
                 $error_count++;
             }
         } else {
@@ -123,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     
     // Generate appropriate success message based on results
-    if ($success_count > 0 || $archived_count > 0) {
+    if ($success_count > 0 || $pending_count > 0) {
         $book_type = $same_book ? "copies of the same book" : "individual books";
         
         // Calculate total academic contexts
@@ -133,28 +145,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $context_info = " (applicable to {$total_contexts} academic contexts)";
         }
         
-        if ($archived_count > 0 && $success_count > 0) {
-            // Both active and archived books were added
-            $total_books_message = "Successfully added {$success_count} {$book_type} to active collection and {$archived_count} to archives{$context_info}!";
+        if ($pending_count > 0 && $success_count > 0) {
+            $total_books_message = "Successfully added {$success_count} {$book_type} to active collection and {$pending_count} to pending archives{$context_info}!";
             $_SESSION['message_type'] = 'warning'; 
-        } elseif ($archived_count > 0) {
-            // Only archived books were added
-            $total_books_message = "Successfully added {$archived_count} {$book_type} to archives{$context_info}!";
+        } elseif ($pending_count > 0) {
+            $total_books_message = "Successfully added {$pending_count} {$book_type} to pending archives (5+ years old){$context_info}!";
             $_SESSION['message_type'] = 'info'; 
         } else {
-            // Only active books were added
             $total_books_message = "Successfully added {$success_count} {$book_type} to active collection{$context_info}!";
             $_SESSION['message_type'] = 'success';
         }
         
         $_SESSION['message'] = $total_books_message;
         
-        // Add error information if any
         if ($error_count > 0) {
             $_SESSION['message'] .= " ({$error_count} failed)";
         }
         
-        // Add context information
         if ($total_contexts > 1) {
             $context_details = [];
             if (count($categories) > 1) $context_details[] = count($categories) . " departments";
@@ -168,11 +175,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             ];
         }
         
-        // Add archive notification if applicable
-        if ($archived_count > 0) {
-            $_SESSION['archive_info'] = [
-                'count' => $archived_count,
-                'message' => "Note: {$archived_count} books were manually archived with reason: '{$archive_reason}'"
+        if ($pending_count > 0) {
+            $_SESSION['pending_info'] = [
+                'count' => $pending_count,
+                'message' => "⚠️ {$pending_count} books sent to Pending Archives (5+ years old). Visit <a href='archives.php?tab=pending'>Archives page</a> to select archive reasons and complete the archiving process."
             ];
         }
         
@@ -183,7 +189,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-// Now set page title and include header
 $page_title = "LibCollect: Reference Mapping System - Add Book";
 include '../includes/header.php';
 ?>
@@ -212,6 +217,13 @@ include '../includes/header.php';
                     <!-- Basic Book Information -->
                     <div class="mb-4">
                         <h6 class="text-primary mb-3"><i class="fas fa-book me-2"></i>Basic Information</h6>
+                        
+                        <!-- Auto-archive notification -->
+                        <div class="alert alert-info" id="autoArchiveNotice" style="display: none;">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Note:</strong> Books published 5+ years ago will be automatically archived upon addition.
+                        </div>
+                        
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Book Title *</label>
@@ -281,13 +293,13 @@ include '../includes/header.php';
                         <!-- Dynamic ISBN Section -->
                         <div class="row" id="isbnSection">
                             <div class="col-12 mb-3">
-                                <label class="form-label">ISBN(s)</label>
+                                <label class="form-label">Call no.</label>
                                 <div id="isbnContainer">
                                     <!-- ISBN inputs will be generated here -->
                                 </div>
                                 <small class="text-muted" id="isbnHelperText">
                                     <i class="fas fa-info-circle me-1"></i>
-                                    ISBN fields generated based on quantity and book type
+                                    Call no. fields generated based on quantity and book type
                                 </small>
                             </div>
                         </div>
@@ -390,110 +402,14 @@ include '../includes/header.php';
                         <div id="previewList" class="small"></div>
                     </div>
 
-                    <!-- Archive Reason Section  -->
-                    <div class="mb-4" id="archiveSection" style="display: none;">
-                        <h6 class="text-warning mb-3"><i class="fas fa-archive me-2"></i>Archive This Book</h6>
-                        <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>This book is 5+ years old.</strong> Please select a reason for archiving it instead of adding to the active collection.
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Archive Reason *</label>
-                            <div class="border rounded p-3 bg-light">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Donated" id="reason_donated">
-                                            <label class="form-check-label" for="reason_donated">
-                                                <i class="fas fa-hands-helping text-success me-1"></i>Donated
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Outdated" id="reason_outdated">
-                                            <label class="form-check-label" for="reason_outdated">
-                                                <i class="fas fa-calendar-times text-warning me-1"></i>Outdated
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Obsolete" id="reason_obsolete">
-                                            <label class="form-check-label" for="reason_obsolete">
-                                                <i class="fas fa-ban text-secondary me-1"></i>Obsolete
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Damaged" id="reason_damaged">
-                                            <label class="form-check-label" for="reason_damaged">
-                                                <i class="fas fa-exclamation-triangle text-danger me-1"></i>Damaged
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Lost" id="reason_lost">
-                                            <label class="form-check-label" for="reason_lost">
-                                                <i class="fas fa-search text-muted me-1"></i>Lost
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Low usage" id="reason_low_usage">
-                                            <label class="form-check-label" for="reason_low_usage">
-                                                <i class="fas fa-chart-line text-info me-1"></i>Low usage
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Availability of more recent edition" id="reason_recent_edition">
-                                            <label class="form-check-label" for="reason_recent_edition">
-                                                <i class="fas fa-sync-alt text-primary me-1"></i>Availability of more recent edition
-                                            </label>
-                                        </div>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="Title ceased publication" id="reason_ceased">
-                                            <label class="form-check-label" for="reason_ceased">
-                                                <i class="fas fa-stop-circle text-dark me-1"></i>Title ceased publication
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Others option with custom text input -->
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input archive-reason-radio" type="radio" name="archive_reason" value="custom" id="reason_others">
-                                    <label class="form-check-label" for="reason_others">
-                                        <i class="fas fa-edit text-secondary me-1"></i>Others:
-                                    </label>
-                                </div>
-                                
-                                <!-- Custom reason text area (hidden by default) -->
-                                <div class="mt-3" id="customReasonSection" style="display: none;">
-                                    <label for="customArchiveReason" class="form-label small text-muted">
-                                        <i class="fas fa-pencil-alt me-1"></i>Please specify the reason:
-                                    </label>
-                                    <textarea class="form-control form-control-sm" 
-                                            id="customArchiveReason" 
-                                            name="custom_archive_reason" 
-                                            rows="2" 
-                                            placeholder="Enter your custom archive reason here..."
-                                            maxlength="200"></textarea>
-                                    <small class="text-muted">Maximum 200 characters</small>
-                                    <div class="small text-muted mt-1" id="customReasonCounter">0/200 characters</div>
-                                </div>
-                            </div>
-                            <small class="text-muted mt-2 d-block">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Required for books published 5+ years ago. This helps maintain proper library records.
-                            </small>
-                        </div>
-                    </div>
-
                     <!-- Action Buttons -->
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-success">
                             <i class="fas fa-save me-1"></i>Add Book to Collection
                         </button>
-                        <button type="button" class="btn btn-info" id="previewBtn">
+                        <!--<button type="button" class="btn btn-info" id="previewBtn">
                             <i class="fas fa-eye me-1"></i>Preview Records
-                        </button>
+                        </button>-->
                         <button type="reset" class="btn btn-outline-warning">
                             <i class="fas fa-redo me-1"></i>Reset Form
                         </button>
@@ -507,7 +423,6 @@ include '../includes/header.php';
     </div>
     
     <div class="col-md-4">
-
         <!-- Department Guidelines Card -->
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
@@ -549,13 +464,11 @@ include '../includes/header.php';
                     <li>Quantity must be at least 1</li>
                 </ul>
                 
-                <h6 class="mt-3">Best Practices:</h6>
+                <h6 class="mt-3">Auto-Archive Policy:</h6>
                 <ul class="small text-muted">
-                    <li>Use complete, official book titles</li>
-                    <li>Include publication year when known</li>
-                    <li>Select all applicable academic contexts</li>
-                    <li>Add detailed descriptions for better searchability</li>
-                    <li>Use preview to verify before adding</li>
+                    <li>Books 5+ years old are automatically archived</li>
+                    <li>Archived books remain searchable</li>
+                    <li>Can be restored from archives anytime</li>
                 </ul>
 
                 <h6 class="mt-3">Examples:</h6>
@@ -570,98 +483,8 @@ include '../includes/header.php';
 </div>
 
 <script>
-// Handle archive reason selection and custom input
-document.addEventListener('change', function(e) {
-    if (e.target.classList.contains('archive-reason-radio')) {
-        const customSection = document.getElementById('customReasonSection');
-        const customTextArea = document.getElementById('customArchiveReason');
-        
-        if (e.target.value === 'custom') {
-            // Show custom input section
-            customSection.style.display = 'block';
-            customTextArea.setAttribute('required', 'required');
-            customSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-            // Hide custom input section
-            customSection.style.display = 'none';
-            customTextArea.removeAttribute('required');
-            customTextArea.value = '';
-        }
-        
-        // Update the visual feedback
-        const selectedLabel = e.target.nextElementSibling;
-        const allLabels = document.querySelectorAll('.archive-reason-radio + label');
-        
-        // Reset all labels
-        allLabels.forEach(label => {
-            label.classList.remove('text-primary', 'fw-bold');
-        });
-        
-        // Highlight selected label
-        if (selectedLabel) {
-            selectedLabel.classList.add('text-primary', 'fw-bold');
-        }
-    }
-});
-
-// Character counter for custom archive reason
-document.addEventListener('DOMContentLoaded', function() {
-    const customArchiveReason = document.getElementById('customArchiveReason');
-    if (customArchiveReason) {
-        customArchiveReason.addEventListener('input', function() {
-            const maxLength = 200;
-            const currentLength = this.value.length;
-            const counter = document.getElementById('customReasonCounter');
-            
-            if (counter) {
-                counter.textContent = `${currentLength}/${maxLength} characters`;
-                
-                if (currentLength > maxLength) {
-                    counter.className = 'small text-danger mt-1';
-                    this.classList.add('is-invalid');
-                } else if (currentLength > 160) {
-                    counter.className = 'small text-warning mt-1';
-                    this.classList.remove('is-invalid');
-                    this.classList.add('is-valid');
-                } else {
-                    counter.className = 'small text-muted mt-1';
-                    this.classList.remove('is-invalid', 'is-valid');
-                }
-            }
-        });
-    }
-});
-
-// Form validation and enhancement (updated to handle archive reason checklist)
+// Form validation
 document.getElementById('addBookForm').addEventListener('submit', function(e) {
-    const archiveSection = document.getElementById('archiveSection');
-    
-    // If archive section is visible, validate archive reason selection
-    if (archiveSection && archiveSection.style.display !== 'none') {
-        const selectedReason = document.querySelector('input[name="archive_reason"]:checked');
-        
-        if (!selectedReason) {
-            e.preventDefault();
-            alert('Please select an archive reason for this book.');
-            return false;
-        }
-        
-        // If "Others" is selected, validate custom reason
-        if (selectedReason.value === 'custom') {
-            const customReason = document.getElementById('customArchiveReason').value.trim();
-            if (!customReason) {
-                e.preventDefault();
-                alert('Please provide a custom archive reason.');
-                document.getElementById('customArchiveReason').focus();
-                return false;
-            }
-            
-            // Update the form to send the custom reason as the archive_reason
-            selectedReason.value = customReason;
-        }
-    }
-    
-    // Continue with existing validation...
     const title = document.querySelector('input[name="title"]').value.trim();
     const author = document.querySelector('input[name="author"]').value.trim();
     const categories = document.querySelectorAll('input[name="category[]"]:checked');
@@ -694,6 +517,35 @@ document.getElementById('publicationYear').addEventListener('focus', function() 
     }
 });
 
+// Check if book will be sent to pending archives
+function checkAutoArchiveStatus() {
+    const publicationYear = document.getElementById('publicationYear').value;
+    const currentYear = new Date().getFullYear();
+    const autoArchiveNotice = document.getElementById('autoArchiveNotice');
+    
+    if (publicationYear && (currentYear - parseInt(publicationYear)) >= 5) {
+        autoArchiveNotice.style.display = 'block';
+        autoArchiveNotice.className = 'alert alert-warning';
+        autoArchiveNotice.innerHTML = `
+            <i class="fas fa-hourglass-half me-2"></i>
+            <strong>Pending Archive:</strong> This book (published in ${publicationYear}) will be sent to Pending Archives (5+ years old). 
+            You'll need to select an archive reason in the Archives page before it's officially archived.
+        `;
+    } else {
+        autoArchiveNotice.style.display = 'none';
+    }
+}
+
+// Event listener for publication year changes
+document.getElementById('publicationYear').addEventListener('input', function() {
+    checkAutoArchiveStatus();
+    
+    // Also update the preview if it's visible
+    if (document.getElementById('previewSection').style.display !== 'none') {
+        document.getElementById('previewBtn').click();
+    }
+});
+
 // Updated Preview functionality
 document.getElementById('previewBtn').addEventListener('click', function() {
     const categories = Array.from(document.querySelectorAll('input[name="category[]"]:checked')).map(cb => cb.value);
@@ -717,11 +569,15 @@ document.getElementById('previewBtn').addEventListener('click', function() {
     
     const totalContexts = finalCategories.length * finalYearLevels.length * finalSemesters.length * finalSections.length;
     
+    // Check if will be auto-archived
+    const currentYear = new Date().getFullYear();
+    const willAutoArchive = publicationYear && (currentYear - parseInt(publicationYear)) >= 5;
+    
     // Update preview
     document.getElementById('physicalCopies').textContent = totalQuantity;
     document.getElementById('contextCount').textContent = totalContexts;
     
-    // Generate preview list showing book copies and their applicable contexts
+    // Generate preview list
     const previewList = document.getElementById('previewList');
     let previewHTML = '<div class="row">';
     
@@ -739,6 +595,8 @@ document.getElementById('previewBtn').addEventListener('click', function() {
                     `<span class="badge bg-secondary ms-1">${bookISBN}</span>` : ''}
                 ${publicationYear ? 
                     `<span class="badge bg-info ms-1">${publicationYear}</span>` : ''}
+                ${willAutoArchive ? 
+                    `<span class="badge bg-warning text-dark ms-1"><i class="fas fa-archive"></i> Auto-Archive</span>` : ''}
             </li>`;
     }
     previewHTML += '</ul></div>';
@@ -775,11 +633,14 @@ document.getElementById('previewBtn').addEventListener('click', function() {
     
     // Add summary information
     previewHTML += `<div class="col-12 mt-3">
-        <div class="alert alert-success">
-            <h6 class="mb-2"><i class="fas fa-check-circle me-2"></i>Summary</h6>
+        <div class="alert ${willAutoArchive ? 'alert-warning' : 'alert-success'}">
+            <h6 class="mb-2"><i class="fas fa-${willAutoArchive ? 'hourglass-half' : 'check-circle'} me-2"></i>Summary</h6>
             <ul class="mb-0 small">
                 <li><strong>${totalQuantity}</strong> physical book ${totalQuantity === 1 ? 'copy' : 'copies'} will be added</li>
                 <li>Each copy applicable to <strong>${totalContexts}</strong> academic context${totalContexts === 1 ? '' : 's'}</li>
+                ${willAutoArchive ? 
+                    '<li class="text-warning"><strong><i class="fas fa-hourglass-half"></i> Will be sent to Pending Archives</strong> (5+ years old - requires archive reason selection)</li>' : 
+                    '<li><strong>Will be added to active collection</strong></li>'}
                 <li><strong>No duplicate copies</strong> - only real physical books are created</li>
                 <li><strong>Maximum availability</strong> - books usable across all selected contexts</li>
             </ul>
@@ -799,11 +660,9 @@ function generateISBNFields() {
     const sameBook = document.getElementById('sameBookToggle').checked;
     const container = document.getElementById('isbnContainer');
     
-    // Clear existing fields
     container.innerHTML = '';
     
     if (sameBook) {
-        // Single ISBN for all copies
         container.innerHTML = `
             <div class="isbn-field mb-2">
                 <div class="input-group">
@@ -811,19 +670,16 @@ function generateISBNFields() {
                         <i class="fas fa-barcode me-1"></i>All ${quantity} copies
                     </span>
                     <input type="text" class="form-control isbn-input" name="isbn" 
-                           placeholder="Enter ISBN for all copies" data-book-index="all">
+                           placeholder="Enter Call No. for all copies" data-book-index="all">
                 </div>
             </div>
         `;
-        
-        // Add hidden field to indicate same book
         container.innerHTML += '<input type="hidden" name="same_book" value="true">';
         
         document.getElementById('isbnHelperText').innerHTML = 
             `<i class="fas fa-check-circle text-success me-1"></i>
-             All ${quantity} copies will share the same ISBN`;
+             All ${quantity} copies will share the same Call No.`;
     } else {
-        // Multiple ISBN fields for different books
         let fieldsHTML = '';
         for (let i = 1; i <= quantity; i++) {
             fieldsHTML += `
@@ -839,8 +695,6 @@ function generateISBNFields() {
             `;
         }
         container.innerHTML = fieldsHTML;
-        
-        // Add hidden field to indicate different books
         container.innerHTML += '<input type="hidden" name="same_book" value="false">';
         
         document.getElementById('isbnHelperText').innerHTML = 
@@ -848,64 +702,18 @@ function generateISBNFields() {
              ${quantity} different books - each can have unique ISBN`;
     }
     
-    // Add ISBN formatting to new fields
     container.querySelectorAll('.isbn-input').forEach(input => {
         input.addEventListener('input', formatISBN);
     });
 }
-
-// Updated checkArchiveStatus function to handle the new checklist UI
-function checkArchiveStatus() {
-    const publicationYear = document.getElementById('publicationYear').value;
-    const currentYear = new Date().getFullYear();
-    const archiveSection = document.getElementById('archiveSection');
-    
-    if (publicationYear && (currentYear - parseInt(publicationYear)) >= 5) {
-        archiveSection.style.display = 'block';
-        // Reset any previously selected archive reasons
-        document.querySelectorAll('.archive-reason-radio').forEach(radio => {
-            radio.checked = false;
-        });
-        const customSection = document.getElementById('customReasonSection');
-        const customTextArea = document.getElementById('customArchiveReason');
-        if (customSection) customSection.style.display = 'none';
-        if (customTextArea) customTextArea.value = '';
-        
-        // Reset label styles
-        const allLabels = document.querySelectorAll('.archive-reason-radio + label');
-        allLabels.forEach(label => {
-            label.classList.remove('text-primary', 'fw-bold');
-        });
-    } else {
-        archiveSection.style.display = 'none';
-        // Clear any selected archive reasons
-        document.querySelectorAll('.archive-reason-radio').forEach(radio => {
-            radio.checked = false;
-        });
-        const customSection = document.getElementById('customReasonSection');
-        if (customSection) customSection.style.display = 'none';
-    }
-}
-
-// Event listener for publication year changes
-document.getElementById('publicationYear').addEventListener('input', function() {
-    checkArchiveStatus();
-    
-    // Also update the preview if it's visible
-    if (document.getElementById('previewSection').style.display !== 'none') {
-        document.getElementById('previewBtn').click();
-    }
-});
 
 // ISBN formatting function
 function formatISBN(event) {
     let value = event.target.value.replace(/[^\d]/g, ''); 
     
     if (value.length === 10) {
-        // Format as ISBN-10
         event.target.value = value.replace(/(\d{3})(\d{1})(\d{3})(\d{3})(\d{1})/, '$1-$2-$3-$4-$5');
     } else if (value.length === 13) {
-        // Format as ISBN-13
         event.target.value = value.replace(/(\d{3})(\d{1})(\d{2})(\d{6})(\d{1})/, '$1-$2-$3-$4-$5');
     }
 }
@@ -917,12 +725,11 @@ document.getElementById('sameBookToggle').addEventListener('change', generateISB
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     generateISBNFields();
+    checkAutoArchiveStatus();
     
-    // Set current year as default for publication year
     const currentYear = new Date().getFullYear();
     document.getElementById('publicationYear').setAttribute('placeholder', `e.g., ${currentYear}`);
     
-    // Add helpful tooltips to checkboxes
     const checkboxGroups = {
         'category[]': 'Books will be available to all selected departments',
         'year_level[]': 'Books will be suitable for all selected year levels',
@@ -942,7 +749,6 @@ document.querySelector('textarea[name="description"]').addEventListener('input',
     const maxLength = 500;
     const currentLength = this.value.length;
     
-    // Create or update character counter
     let counter = document.getElementById('descriptionCounter');
     if (!counter) {
         counter = document.createElement('small');
@@ -966,7 +772,6 @@ document.getElementById('publicationYear').addEventListener('input', function() 
     const year = parseInt(this.value);
     const currentYear = new Date().getFullYear();
     
-    // Remove any existing validation message
     let existingMsg = this.parentNode.querySelector('.year-validation');
     if (existingMsg) {
         existingMsg.remove();
@@ -993,29 +798,10 @@ document.getElementById('publicationYear').addEventListener('input', function() 
     }
 });
 
-// Updated reset form handler to handle archive reason checkboxes
+// Reset form handler
 document.querySelector('button[type="reset"]').addEventListener('click', function() {
-    // Reset archive reason selections
-    document.querySelectorAll('.archive-reason-radio').forEach(radio => {
-        radio.checked = false;
-    });
-    const customSection = document.getElementById('customReasonSection');
-    const customTextArea = document.getElementById('customArchiveReason');
-    if (customSection) customSection.style.display = 'none';
-    if (customTextArea) customTextArea.value = '';
-    
-    // Reset label styles
-    const allLabels = document.querySelectorAll('.archive-reason-radio + label');
-    allLabels.forEach(label => {
-        label.classList.remove('text-primary', 'fw-bold');
-    });
-    
-    // Hide archive section
-    const archiveSection = document.getElementById('archiveSection');
-    if (archiveSection) archiveSection.style.display = 'none';
-    
-    // Continue with existing reset functionality...
     document.getElementById('previewSection').style.display = 'none';
+    document.getElementById('autoArchiveNotice').style.display = 'none';
     document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
     document.getElementById('sameBookToggle').checked = true;
     document.getElementById('publicationYear').classList.remove('is-invalid', 'is-valid');
@@ -1029,10 +815,8 @@ document.querySelector('button[type="reset"]').addEventListener('click', functio
 // Update preview when selections change
 document.addEventListener('change', function(e) {
     if (e.target.type === 'checkbox' || e.target.name === 'section' || e.target.id === 'quantityInput' || e.target.id === 'publicationYear') {
-        // Hide preview when selections change
         document.getElementById('previewSection').style.display = 'none';
         
-        // Regenerate ISBN fields if quantity changed
         if (e.target.id === 'quantityInput') {
             generateISBNFields();
         }
@@ -1067,11 +851,9 @@ document.addEventListener('change', function(e) {
         const courseCodeInput = document.querySelector('input[name="course_code"]');
         
         if (quickFillSuggestions[category]) {
-            // Update placeholders with suggestions
             subjectInput.setAttribute('list', 'subject-suggestions');
             courseCodeInput.setAttribute('list', 'coursecode-suggestions');
             
-            // Create or update datalists
             let subjectDatalist = document.getElementById('subject-suggestions');
             let courseCodeDatalist = document.getElementById('coursecode-suggestions');
             
@@ -1087,7 +869,6 @@ document.addEventListener('change', function(e) {
                 document.body.appendChild(courseCodeDatalist);
             }
             
-            // Clear and populate datalists
             subjectDatalist.innerHTML = '';
             courseCodeDatalist.innerHTML = '';
             

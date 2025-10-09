@@ -53,6 +53,56 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
                 break;
                 
+            case 'archive_pending':
+                // Archive a pending book with selected reason
+                if (isset($_POST['final_archive_reason']) && isset($_POST['pending_id'])) {
+                    $pendingId = $_POST['pending_id'];
+                    $archiveReason = $_POST['final_archive_reason'];
+                    
+                    // Get pending book data
+                    $stmt = $pdo->prepare("SELECT * FROM pending_archives WHERE id = ?");
+                    $stmt->execute([$pendingId]);
+                    $pendingBook = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($pendingBook) {
+                        // Prepare data for archiving
+                        $archiveData = [
+                            'title' => $pendingBook['title'],
+                            'author' => $pendingBook['author'],
+                            'isbn' => $pendingBook['isbn'],
+                            'category' => $pendingBook['category'],
+                            'quantity' => $pendingBook['quantity'],
+                            'description' => $pendingBook['description'],
+                            'subject_name' => $pendingBook['subject_name'],
+                            'semester' => $pendingBook['semester'],
+                            'section' => $pendingBook['section'],
+                            'year_level' => $pendingBook['year_level'],
+                            'course_code' => $pendingBook['course_code'],
+                            'publication_year' => $pendingBook['publication_year'],
+                            'book_copy_number' => $pendingBook['book_copy_number'],
+                            'total_quantity' => $pendingBook['total_quantity'],
+                            'is_multi_context' => $pendingBook['is_multi_context'],
+                            'same_book_series' => $pendingBook['same_book_series']
+                        ];
+                        
+                        // Archive the book
+                        $result = $book->archiveBook($archiveData, $archiveReason, $_SESSION['user_name'] ?? 'System');
+                        
+                        if ($result) {
+                            // Remove from pending archives
+                            $stmt = $pdo->prepare("DELETE FROM pending_archives WHERE id = ?");
+                            $stmt->execute([$pendingId]);
+                            
+                            $_SESSION['message'] = 'Book successfully archived!';
+                            $_SESSION['message_type'] = 'success';
+                        } else {
+                            $_SESSION['message'] = 'Failed to archive book!';
+                            $_SESSION['message_type'] = 'danger';
+                        }
+                    }
+                }
+                break;
+                
             case 'restore':
                 if ($book->restoreFromArchive($_POST['id'])) {
                     $_SESSION['message'] = 'Book restored successfully!';
@@ -92,13 +142,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
                 break;
                 
-            case 'manual_archive':
-                if ($book->archiveBook($_POST['id'], 'Manual archiving via archives interface', 'Admin')) {
-                    $_SESSION['message'] = 'Book archived successfully!';
+            case 'delete_pending':
+                // Delete from pending archives
+                $stmt = $pdo->prepare("DELETE FROM pending_archives WHERE id = ?");
+                if ($stmt->execute([$_POST['id']])) {
+                    $_SESSION['message'] = 'Pending book removed!';
                     $_SESSION['message_type'] = 'success';
                 } else {
-                    $_SESSION['message'] = 'Failed to archive book!';
+                    $_SESSION['message'] = 'Failed to remove pending book!';
                     $_SESSION['message_type'] = 'danger';
+                }
+                break;
+                
+            case 'update_archive_reason':
+                if (isset($_POST['final_archive_reason']) && isset($_POST['book_ids'])) {
+                    $newReason = $_POST['final_archive_reason'];
+                    $bookIds = explode(',', $_POST['book_ids']);
+                    
+                    $updateCount = 0;
+                    foreach ($bookIds as $bookId) {
+                        $bookId = trim($bookId);
+                        if (!empty($bookId)) {
+                            $stmt = $pdo->prepare("UPDATE archived_books SET archive_reason = ?, updated_at = NOW() WHERE id = ?");
+                            if ($stmt->execute([$newReason, $bookId])) {
+                                $updateCount++;
+                            }
+                        }
+                    }
+                    
+                    if ($updateCount > 0) {
+                        $_SESSION['message'] = "Successfully updated archive reason for {$updateCount} book record(s)!";
+                        $_SESSION['message_type'] = 'success';
+                    } else {
+                        $_SESSION['message'] = 'Failed to update archive reason!';
+                        $_SESSION['message_type'] = 'danger';
+                    }
                 }
                 break;
         }
@@ -107,16 +185,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
-// Function to merge duplicate archived books (updated for is_multi_context)
+// Function to merge duplicate archived books
 function mergeArchivedBooks($books) {
     $mergedBooks = [];
     
     foreach ($books as $bookItem) {
-        // Create a unique key based on title, author, ISBN, and publication year
         $key = md5(strtolower($bookItem['title'] . '|' . $bookItem['author'] . '|' . $bookItem['isbn'] . '|' . ($bookItem['publication_year'] ?? '')));
         
         if (!isset($mergedBooks[$key])) {
-            // First occurrence of this book
             $mergedBooks[$key] = $bookItem;
             $mergedBooks[$key]['total_quantity'] = $bookItem['quantity'];
             $mergedBooks[$key]['academic_contexts'] = [];
@@ -124,7 +200,6 @@ function mergeArchivedBooks($books) {
             $mergedBooks[$key]['archive_dates'] = [date('Y-m-d', strtotime($bookItem['archived_at']))];
             $mergedBooks[$key]['archive_reasons'] = [$bookItem['archive_reason']];
         } else {
-            // Merge with existing book
             $mergedBooks[$key]['total_quantity'] += $bookItem['quantity'];
             $mergedBooks[$key]['record_ids'][] = $bookItem['id'];
             $archiveDate = date('Y-m-d', strtotime($bookItem['archived_at']));
@@ -136,7 +211,6 @@ function mergeArchivedBooks($books) {
             }
         }
         
-        // Add academic context
         $context = [];
         if (!empty($bookItem['category'])) $context['category'] = $bookItem['category'];
         if (!empty($bookItem['year_level'])) $context['year_level'] = $bookItem['year_level'];
@@ -145,7 +219,44 @@ function mergeArchivedBooks($books) {
         if (!empty($bookItem['subject_name'])) $context['subject_name'] = $bookItem['subject_name'];
         if (!empty($bookItem['course_code'])) $context['course_code'] = $bookItem['course_code'];
         
-        // Only add if context has meaningful data
+        if (!empty($context)) {
+            $mergedBooks[$key]['academic_contexts'][] = $context;
+        }
+    }
+    
+    return array_values($mergedBooks);
+}
+
+// Function to merge pending books
+function mergePendingBooks($books) {
+    $mergedBooks = [];
+    
+    foreach ($books as $bookItem) {
+        $key = md5(strtolower($bookItem['title'] . '|' . $bookItem['author'] . '|' . $bookItem['isbn'] . '|' . ($bookItem['publication_year'] ?? '')));
+        
+        if (!isset($mergedBooks[$key])) {
+            $mergedBooks[$key] = $bookItem;
+            $mergedBooks[$key]['total_quantity'] = $bookItem['quantity'];
+            $mergedBooks[$key]['academic_contexts'] = [];
+            $mergedBooks[$key]['record_ids'] = [$bookItem['id']];
+            $mergedBooks[$key]['pending_dates'] = [date('Y-m-d', strtotime($bookItem['pending_since']))];
+        } else {
+            $mergedBooks[$key]['total_quantity'] += $bookItem['quantity'];
+            $mergedBooks[$key]['record_ids'][] = $bookItem['id'];
+            $pendingDate = date('Y-m-d', strtotime($bookItem['pending_since']));
+            if (!in_array($pendingDate, $mergedBooks[$key]['pending_dates'])) {
+                $mergedBooks[$key]['pending_dates'][] = $pendingDate;
+            }
+        }
+        
+        $context = [];
+        if (!empty($bookItem['category'])) $context['category'] = $bookItem['category'];
+        if (!empty($bookItem['year_level'])) $context['year_level'] = $bookItem['year_level'];
+        if (!empty($bookItem['semester'])) $context['semester'] = $bookItem['semester'];
+        if (!empty($bookItem['section'])) $context['section'] = $bookItem['section'];
+        if (!empty($bookItem['subject_name'])) $context['subject_name'] = $bookItem['subject_name'];
+        if (!empty($bookItem['course_code'])) $context['course_code'] = $bookItem['course_code'];
+        
         if (!empty($context)) {
             $mergedBooks[$key]['academic_contexts'][] = $context;
         }
@@ -173,17 +284,14 @@ function getArchivedBooksGrouped($pdo, $category = '', $search = '', $groupBy = 
             $params[] = "%$search%";
         }
         
-        // Add ordering
         $query .= " ORDER BY title ASC, author ASC";
         
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);
         $books = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // First merge duplicate books
         $mergedBooks = mergeArchivedBooks($books);
         
-        // Then group the merged results
         $grouped = [];
         foreach ($mergedBooks as $bookItem) {
             switch ($groupBy) {
@@ -194,9 +302,9 @@ function getArchivedBooksGrouped($pdo, $category = '', $search = '', $groupBy = 
                     $key = strtoupper(substr($bookItem['author'], 0, 1));
                     break;
                 case 'archive_date':
-                    $key = $bookItem['archive_dates'][0]; // Use first archive date
+                    $key = $bookItem['archive_dates'][0];
                     break;
-                default: // category
+                default:
                     $key = $bookItem['category'];
             }
             
@@ -209,6 +317,42 @@ function getArchivedBooksGrouped($pdo, $category = '', $search = '', $groupBy = 
         return $grouped;
     } catch (PDOException $e) {
         error_log("Error getting archived books: " . $e->getMessage());
+        return [];
+    }
+}
+
+function getPendingArchivesGrouped($pdo, $groupBy = 'category') {
+    try {
+        $query = "SELECT * FROM pending_archives ORDER BY title ASC, author ASC";
+        
+        $stmt = $pdo->prepare($query);
+        $stmt->execute();
+        $books = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $mergedBooks = mergePendingBooks($books);
+        
+        $grouped = [];
+        foreach ($mergedBooks as $bookItem) {
+            switch ($groupBy) {
+                case 'year':
+                    $key = $bookItem['publication_year'] ?: 'Unknown Year';
+                    break;
+                case 'author':
+                    $key = strtoupper(substr($bookItem['author'], 0, 1));
+                    break;
+                default:
+                    $key = $bookItem['category'];
+            }
+            
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [];
+            }
+            $grouped[$key][] = $bookItem;
+        }
+        
+        return $grouped;
+    } catch (PDOException $e) {
+        error_log("Error getting pending archives: " . $e->getMessage());
         return [];
     }
 }
@@ -226,10 +370,8 @@ function getBooksEligibleForArchivingGrouped($pdo, $groupBy = 'category') {
         $stmt->execute([$cutoffYear]);
         $books = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // First merge duplicate eligible books
         $mergedBooks = mergeEligibleBooks($books);
         
-        // Then group the merged results
         $grouped = [];
         foreach ($mergedBooks as $bookItem) {
             switch ($groupBy) {
@@ -239,7 +381,7 @@ function getBooksEligibleForArchivingGrouped($pdo, $groupBy = 'category') {
                 case 'author':
                     $key = strtoupper(substr($bookItem['author'], 0, 1));
                     break;
-                default: // category
+                default:
                     $key = $bookItem['category'];
             }
             
@@ -256,27 +398,22 @@ function getBooksEligibleForArchivingGrouped($pdo, $groupBy = 'category') {
     }
 }
 
-// Function to merge duplicate eligible books
 function mergeEligibleBooks($books) {
     $mergedBooks = [];
     
     foreach ($books as $bookItem) {
-        // Create a unique key based on title, author, ISBN, and publication year
         $key = md5(strtolower($bookItem['title'] . '|' . $bookItem['author'] . '|' . $bookItem['isbn'] . '|' . ($bookItem['publication_year'] ?? '')));
         
         if (!isset($mergedBooks[$key])) {
-            // First occurrence of this book
             $mergedBooks[$key] = $bookItem;
             $mergedBooks[$key]['total_quantity'] = $bookItem['quantity'];
             $mergedBooks[$key]['academic_contexts'] = [];
             $mergedBooks[$key]['record_ids'] = [$bookItem['id']];
         } else {
-            // Merge with existing book
             $mergedBooks[$key]['total_quantity'] += $bookItem['quantity'];
             $mergedBooks[$key]['record_ids'][] = $bookItem['id'];
         }
         
-        // Add academic context
         $context = [];
         if (!empty($bookItem['category'])) $context['category'] = $bookItem['category'];
         if (!empty($bookItem['year_level'])) $context['year_level'] = $bookItem['year_level'];
@@ -285,7 +422,6 @@ function mergeEligibleBooks($books) {
         if (!empty($bookItem['subject_name'])) $context['subject_name'] = $bookItem['subject_name'];
         if (!empty($bookItem['course_code'])) $context['course_code'] = $bookItem['course_code'];
         
-        // Only add if context has meaningful data
         if (!empty($context)) {
             $mergedBooks[$key]['academic_contexts'][] = $context;
         }
@@ -297,13 +433,24 @@ function mergeEligibleBooks($books) {
 // Get parameters
 $category_filter = isset($_GET['category']) ? $_GET['category'] : '';
 $search = isset($_GET['search']) ? $_GET['search'] : '';
-$tab = isset($_GET['tab']) ? $_GET['tab'] : 'archived';
+$tab = isset($_GET['tab']) ? $_GET['tab'] : 'pending';
 $groupBy = isset($_GET['group_by']) ? $_GET['group_by'] : 'category';
 
-// Get data for the page using Book class methods
+// Get data for the page
 $archivedBooks = getArchivedBooksGrouped($pdo, $category_filter, $search, $groupBy);
+$pendingArchives = getPendingArchivesGrouped($pdo, $groupBy);
 $eligibleBooks = getBooksEligibleForArchivingGrouped($pdo, $groupBy);
 $archiveStats = $book->getArchiveStats();
+
+// Get pending count
+$pendingCount = 0;
+try {
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM pending_archives");
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $pendingCount = $result['count'];
+} catch (PDOException $e) {
+    $pendingCount = 0;
+}
 
 // Department configuration
 $departments = [
@@ -326,7 +473,7 @@ include '../includes/header.php';
 ?>
 
 <style>
-/* Enhanced Book Card Styles (similar to books.php) */
+/* Enhanced Book Card Styles */
 .book-card {
     transition: all 0.3s ease;
     border: none;
@@ -450,6 +597,27 @@ include '../includes/header.php';
     backdrop-filter: blur(10px);
 }
 
+.pending-badge-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 193, 7, 0.9);
+    color: #000;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    z-index: 4;
+    backdrop-filter: blur(10px);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
 .eligible-badge-overlay {
     position: absolute;
     top: 50%;
@@ -463,6 +631,10 @@ include '../includes/header.php';
     font-weight: bold;
     z-index: 4;
     backdrop-filter: blur(10px);
+}
+
+.pending-cover {
+    background: #ff9800 !important;
 }
 
 .eligible-cover {
@@ -558,6 +730,15 @@ include '../includes/header.php';
     font-size: 0.8rem;
 }
 
+.pending-info {
+    background: #fff3cd;
+    border-radius: 8px;
+    padding: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.8rem;
+    border: 1px solid #ffc107;
+}
+
 .book-actions {
     margin-top: auto;
 }
@@ -590,6 +771,22 @@ include '../includes/header.php';
 /* Archive-specific overrides */
 .archive-card .book-cover {
     filter: grayscale(20%);
+}
+
+.archive-card.clickable-card {
+    cursor: pointer;
+}
+
+.archive-card.clickable-card .book-details {
+    cursor: pointer;
+}
+
+.pending-card {
+    cursor: pointer;
+}
+
+.pending-card .book-cover {
+    filter: saturate(1.3);
 }
 
 .eligible-card .book-cover {
@@ -689,20 +886,20 @@ include '../includes/header.php';
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-3">
+        <div class="card border-warning bg-warning bg-opacity-10">
+            <div class="card-body text-center">
+                <i class="fas fa-hourglass-half fa-2x mb-2 text-warning"></i>
+                <h3><?php echo $pendingCount; ?></h3>
+                <p class="mb-0">Pending Archives</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
         <div class="card stats-card">
             <div class="card-body text-center">
                 <i class="fas fa-archive fa-2x mb-2" style="color: black;"></i>
                 <h3 style="color: black;"><?php echo $archiveStats['total_archived']; ?></h3>
                 <p class="mb-0" style="color: black;">Archived Books</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-warning">
-            <div class="card-body text-center">
-                <i class="fas fa-clock fa-2x mb-2 text-warning"></i>
-                <h3><?php echo $archiveStats['eligible_for_archive']; ?></h3>
-                <p class="mb-0">Eligible for Archive</p>
             </div>
         </div>
     </div>
@@ -729,23 +926,193 @@ include '../includes/header.php';
 <!-- Navigation Tabs -->
 <ul class="nav nav-tabs mb-4" id="archiveTabs" role="tablist">
     <li class="nav-item" role="presentation">
+        <button class="nav-link <?php echo $tab === 'pending' ? 'active' : ''; ?>" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab">
+            <i class="fas fa-hourglass-half me-1" style="color: black;"></i>
+            <span style="color: black;">Pending Archives (<?php echo $pendingCount; ?>)</span>
+            <?php if ($pendingCount > 0): ?>
+                <span class="badge bg-warning text-dark ms-1"><?php echo $pendingCount; ?></span>
+            <?php endif; ?>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
         <button class="nav-link <?php echo $tab === 'archived' ? 'active' : ''; ?>" id="archived-tab" data-bs-toggle="tab" data-bs-target="#archived" type="button" role="tab">
-            <i class="fas fa-archive me-1"></i>Archived Books (<?php echo array_sum(array_map('count', $archivedBooks)); ?>)
+            <i class="fas fa-archive me-1" style="color: black;"></i>
+            <span style="color: black;">
+            Archived Books (<?php echo array_sum(array_map('count', $archivedBooks)); ?>)
+            </span>
         </button>
     </li>
-    <li class="nav-item" role="presentation">
+    <!--<li class="nav-item" role="presentation">
         <button class="nav-link <?php echo $tab === 'eligible' ? 'active' : ''; ?>" id="eligible-tab" data-bs-toggle="tab" data-bs-target="#eligible" type="button" role="tab">
-            <i class="fas fa-clock me-1"></i>Eligible for Archive (<?php echo array_sum(array_map('count', $eligibleBooks)); ?>)
+        <i class="fas fa-clock me-1" style="color: black;"></i>
+        <span style="color: black;">
+        Eligible for Archive (<?php echo array_sum(array_map('count', $eligibleBooks)); ?>)
+        </span>
         </button>
-    </li>
-    <li class="nav-item" role="presentation">
+    </li>-->
+    <!--<li class="nav-item" role="presentation">
         <button class="nav-link <?php echo $tab === 'stats' ? 'active' : ''; ?>" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">
-            <i class="fas fa-chart-bar me-1"></i>Statistics
+        <i class="fas fa-chart-bar me-1" style="color: black;"></i>
+        <span style="color: black;">Statistics</span>
         </button>
-    </li>
+    </li>-->
 </ul>
 
 <div class="tab-content" id="archiveTabContent">
+    <!-- Pending Archives Tab -->
+    <div class="tab-pane fade <?php echo $tab === 'pending' ? 'show active' : ''; ?>" id="pending" role="tabpanel">
+        <?php if (empty($pendingArchives)): ?>
+            <div class="text-center py-5">
+                <i class="fas fa-hourglass-half fa-3x text-warning mb-3"></i>
+                <h4 class="text-muted">No pending archives</h4>
+                <p class="text-muted">Books older than 5 years will appear here before being archived.</p>
+            </div>
+        <?php else: ?>
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong><?php echo $pendingCount; ?> books</strong> are waiting to be archived. Click on any book to select an archive reason.
+            </div>
+            
+            <?php foreach ($pendingArchives as $groupKey => $books): ?>
+                <div class="mb-4">
+                    <div class="group-header card border-warning">
+                        <div class="card-body py-3 group-collapse" data-bs-toggle="collapse" data-bs-target="#pending-group-<?php echo md5($groupKey); ?>">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="<?php echo $groupOptions[$groupBy]['icon']; ?> me-2"></i>
+                                    <?php 
+                                    if ($groupBy === 'category' && isset($departments[$groupKey])) {
+                                        echo $departments[$groupKey]['name'];
+                                    } else {
+                                        echo htmlspecialchars($groupKey);
+                                    }
+                                    ?>
+                                    <span class="badge bg-warning text-dark ms-2"><?php echo count($books); ?> books</span>
+                                </h5>
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="collapse show" id="pending-group-<?php echo md5($groupKey); ?>">
+                        <div class="book-grid">
+                            <?php foreach ($books as $book): ?>
+                                <div class="book-card pending-card" 
+                                     data-department="<?php echo htmlspecialchars(getCategoryDisplayInfo($book['category'], $departments)['primary']); ?>"
+                                     data-pending-id="<?php echo $book['id']; ?>"
+                                     data-book-ids="<?php echo implode(',', $book['record_ids']); ?>"
+                                     data-book-title="<?php echo htmlspecialchars($book['title']); ?>"
+                                     data-book-author="<?php echo htmlspecialchars($book['author']); ?>"
+                                     data-book-isbn="<?php echo htmlspecialchars($book['isbn'] ?? 'N/A'); ?>"
+                                     data-book-year="<?php echo htmlspecialchars($book['publication_year'] ?? 'N/A'); ?>"
+                                     data-book-category="<?php echo htmlspecialchars($book['category']); ?>"
+                                     data-book-quantity="<?php echo $book['total_quantity']; ?>">
+                                    <!-- Book Cover -->
+                                    <div class="book-cover pending-cover">
+                                        <div class="book-spine">
+                                            <i class="fas fa-book"></i>
+                                        </div>
+                                        
+                                        <div class="book-info">
+                                            <div class="book-id">#<?php echo $book['id']; ?></div>
+                                            <?php $categoryInfo = getCategoryDisplayInfo($book['category'], $departments); ?>
+                                            <span class="badge bg-<?php echo $categoryInfo['color']; ?> department-badge">
+                                                <?php echo htmlspecialchars($categoryInfo['display']); ?>
+                                            </span>
+                                        </div>
+                                        
+                                        <!-- Merged book indicator -->
+                                        <?php if (count($book['record_ids']) > 1): ?>
+                                            <div class="merged-indicator">
+                                                <i class="fas fa-layer-group me-1"></i><?php echo count($book['record_ids']); ?> Records
+                                            </div>
+                                        <?php endif; ?>
+                                        
+                                        <!-- Publication year badge -->
+                                        <?php if (!empty($book['publication_year'])): ?>
+                                            <div class="publication-year-badge">
+                                                <i class="fas fa-calendar me-1"></i><?php echo $book['publication_year']; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        
+                                        <!-- Total copies badge -->
+                                        <div class="total-copies-badge">
+                                            <i class="fas fa-copy me-1"></i><?php echo $book['total_quantity']; ?>
+                                        </div>
+                                        
+                                        <!-- Pending badge -->
+                                        <div class="pending-badge-overlay">
+                                            PENDING
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Book Details -->
+                                    <div class="book-details">
+                                        <h6 class="book-title" title="<?php echo htmlspecialchars($book['title']); ?>">
+                                            <?php echo htmlspecialchars($book['title']); ?>
+                                        </h6>
+                                        
+                                        <p class="book-author">
+                                            <i class="fas fa-user me-1 text-muted"></i>
+                                            <span class="text-dark"><?php echo htmlspecialchars($book['author']); ?></span>
+                                        </p>
+                                        
+                                        <?php if (!empty($book['isbn'])): ?>
+                                            <p class="book-isbn">
+                                                <i class="fas fa-barcode me-1 text-muted"></i>
+                                                <span class="text-muted"><?php echo htmlspecialchars($book['isbn']); ?></span>
+                                            </p>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (!empty($book['publication_year'])): ?>
+                                            <?php 
+                                            $age = date('Y') - $book['publication_year'];
+                                            $ageClass = $age >= 50 ? 'age-ancient' : ($age >= 30 ? 'age-very-old' : 'age-old');
+                                            ?>
+                                            <p class="book-year">
+                                                <i class="fas fa-calendar-alt me-1 text-muted"></i>
+                                                <span class="text-muted">Published: <?php echo $book['publication_year']; ?></span>
+                                                <span class="book-age <?php echo $ageClass; ?> ms-2"><?php echo $age; ?>y</span>
+                                            </p>
+                                        <?php endif; ?>
+                                        
+                                        <!-- Pending Information -->
+                                        <div class="pending-info">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <?php $categoryInfo = getCategoryDisplayInfo($book['category'], $departments); ?>
+                                                <span class="badge bg-<?php echo $categoryInfo['color']; ?> me-1">
+                                                    <?php echo htmlspecialchars($categoryInfo['display']); ?>
+                                                </span>
+                                                <span class="badge bg-secondary">Qty: <?php echo $book['quantity']; ?></span>
+                                            </div>
+                                            <small class="text-warning">
+                                                <i class="fas fa-clock me-1"></i>Pending since: <?php echo date('M j, Y', strtotime($book['pending_since'])); ?>
+                                            </small>
+                                        </div>
+                                        
+                                        <!-- Action Buttons -->
+                                        <div class="book-actions" onclick="event.stopPropagation();">
+                                            <div class="d-grid gap-1">
+                                                <button type="button" class="btn btn-warning btn-sm" 
+                                                        onclick="event.stopPropagation(); openArchiveReasonModal(<?php echo $book['id']; ?>)">
+                                                    <i class="fas fa-archive me-1"></i>Select Reason & Archive
+                                                </button>
+                                                <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                        onclick="event.stopPropagation(); deletePendingBook(<?php echo $book['id']; ?>, '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                    <i class="fas fa-times me-1"></i>Remove from Pending
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+
     <!-- Archived Books Tab -->
     <div class="tab-pane fade <?php echo $tab === 'archived' ? 'show active' : ''; ?>" id="archived" role="tabpanel">
         <!-- Search, Filter and Group Controls -->
@@ -833,8 +1200,17 @@ include '../includes/header.php';
                     <div class="collapse show" id="archived-group-<?php echo md5($groupKey); ?>">
                         <div class="book-grid">
                             <?php foreach ($books as $book): ?>
-                                <div class="book-card archive-card" data-department="<?php echo htmlspecialchars(getCategoryDisplayInfo($book['category'], $departments)['primary']); ?>">
-                                    <!-- Enhanced Book Cover (similar to books.php) -->
+                                <div class="book-card archive-card clickable-card" 
+                                     data-department="<?php echo htmlspecialchars(getCategoryDisplayInfo($book['category'], $departments)['primary']); ?>"
+                                     data-book-ids="<?php echo implode(',', $book['record_ids']); ?>"
+                                     data-book-title="<?php echo htmlspecialchars($book['title']); ?>"
+                                     data-book-author="<?php echo htmlspecialchars($book['author']); ?>"
+                                     data-book-isbn="<?php echo htmlspecialchars($book['isbn'] ?? 'N/A'); ?>"
+                                     data-book-year="<?php echo htmlspecialchars($book['publication_year'] ?? 'N/A'); ?>"
+                                     data-book-category="<?php echo htmlspecialchars($book['category']); ?>"
+                                     data-book-quantity="<?php echo $book['total_quantity']; ?>"
+                                     data-archive-reason="<?php echo htmlspecialchars(implode(', ', array_unique($book['archive_reasons']))); ?>">
+                                    <!-- Enhanced Book Cover -->
                                     <div class="book-cover">
                                         <div class="book-spine">
                                             <i class="fas fa-book"></i>
@@ -876,7 +1252,7 @@ include '../includes/header.php';
                                         </div>
                                     </div>
                                     
-                                    <!-- Enhanced Book Details -->
+                                    <!-- Book Details (rest of the archived book display) -->
                                     <div class="book-details">
                                         <h6 class="book-title" title="<?php echo htmlspecialchars($book['title']); ?>">
                                             <?php echo htmlspecialchars($book['title']); ?>
@@ -887,109 +1263,11 @@ include '../includes/header.php';
                                             <span class="text-dark"><?php echo htmlspecialchars($book['author']); ?></span>
                                         </p>
                                         
-                                        <?php if (!empty($book['isbn'])): ?>
-                                            <p class="book-isbn">
-                                                <i class="fas fa-barcode me-1 text-muted"></i>
-                                                <span class="text-muted"><?php echo htmlspecialchars($book['isbn']); ?></span>
-                                            </p>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (!empty($book['publication_year'])): ?>
-                                            <?php 
-                                            $age = date('Y') - $book['publication_year'];
-                                            $ageClass = $age >= 50 ? 'age-ancient' : ($age >= 30 ? 'age-very-old' : 'age-old');
-                                            ?>
-                                            <p class="book-year">
-                                                <i class="fas fa-calendar-alt me-1 text-muted"></i>
-                                                <span class="text-muted">Published: <?php echo $book['publication_year']; ?></span>
-                                                <span class="book-age <?php echo $ageClass; ?> ms-2"><?php echo $age; ?>y</span>
-                                            </p>
-                                        <?php endif; ?>
-                                        
-                                        <!-- Academic Contexts - Grouped Display (like books.php) -->
-                                        <?php if (!empty($book['academic_contexts'])): ?>
-                                            <div class="academic-contexts">
-                                                <div class="context-header">
-                                                    <i class="fas fa-graduation-cap me-1"></i>
-                                                    Academic Uses (<?php echo count($book['academic_contexts']); ?>)
-                                                </div>
-                                                
-                                                <?php 
-                                                // Group contexts by department
-                                                $contextsByDept = [];
-                                                foreach ($book['academic_contexts'] as $context) {
-                                                    $dept = $context['category'] ?? 'General';
-                                                    if (!isset($contextsByDept[$dept])) {
-                                                        $contextsByDept[$dept] = [];
-                                                    }
-                                                    $contextsByDept[$dept][] = $context;
-                                                }
-                                                ?>
-                                                
-                                                <?php foreach ($contextsByDept as $dept => $contexts): ?>
-                                                    <div class="context-group">
-                                                        <div class="d-flex align-items-center mb-2">
-                                                            <?php 
-                                                            $deptInfo = getCategoryDisplayInfo($dept, $departments);
-                                                            $deptColor = $deptInfo['color'];
-                                                            ?>
-                                                            <strong class="text-<?php echo $deptColor; ?> me-2">
-                                                                <?php echo htmlspecialchars($deptInfo['display']); ?>
-                                                            </strong>
-                                                            <small class="text-muted">(<?php echo count($contexts); ?> context<?php echo count($contexts) > 1 ? 's' : ''; ?>)</small>
-                                                        </div>
-                                                        
-                                                        <?php 
-                                                        // Aggregate unique values for this department
-                                                        $yearLevels = array_unique(array_filter(array_column($contexts, 'year_level')));
-                                                        $semesters = array_unique(array_filter(array_column($contexts, 'semester')));
-                                                        $sections = array_unique(array_filter(array_column($contexts, 'section')));
-                                                        $subjects = array_unique(array_filter(array_column($contexts, 'subject_name')));
-                                                        $courseCodes = array_unique(array_filter(array_column($contexts, 'course_code')));
-                                                        ?>
-                                                        
-                                                        <div>
-                                                            <?php if (!empty($yearLevels)): ?>
-                                                                <?php foreach ($yearLevels as $yearLevel): ?>
-                                                                    <span class="badge bg-success"><?php echo htmlspecialchars($yearLevel); ?></span>
-                                                                <?php endforeach; ?>
-                                                            <?php endif; ?>
-                                                            
-                                                            <?php if (!empty($semesters)): ?>
-                                                                <?php foreach ($semesters as $semester): ?>
-                                                                    <span class="badge bg-info"><?php echo htmlspecialchars($semester); ?></span>
-                                                                <?php endforeach; ?>
-                                                            <?php endif; ?>
-                                                            
-                                                            <?php if (!empty($sections)): ?>
-                                                                <?php foreach ($sections as $section): ?>
-                                                                    <span class="badge bg-warning text-dark">Sec <?php echo htmlspecialchars($section); ?></span>
-                                                                <?php endforeach; ?>
-                                                            <?php endif; ?>
-                                                            
-                                                            <?php if (!empty($subjects)): ?>
-                                                                <?php foreach ($subjects as $subject): ?>
-                                                                    <span class="badge bg-primary"><?php echo htmlspecialchars($subject); ?></span>
-                                                                <?php endforeach; ?>
-                                                            <?php endif; ?>
-                                                            
-                                                            <?php if (!empty($courseCodes)): ?>
-                                                                <?php foreach ($courseCodes as $courseCode): ?>
-                                                                    <span class="badge bg-secondary"><?php echo htmlspecialchars($courseCode); ?></span>
-                                                                <?php endforeach; ?>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                <?php endforeach; ?>
-                                            </div>
-                                        <?php endif; ?>
-                                        
                                         <!-- Archive Information -->
                                         <div class="archive-info">
                                             <div class="d-flex justify-content-between align-items-center mb-2">
                                                 <?php $categoryInfo = getCategoryDisplayInfo($book['category'], $departments); ?>
-                                                <span class="badge bg-<?php echo $categoryInfo['color']; ?> me-1" 
-                                                    title="<?php echo htmlspecialchars($book['category']); ?>">
+                                                <span class="badge bg-<?php echo $categoryInfo['color']; ?> me-1">
                                                     <?php echo htmlspecialchars($categoryInfo['display']); ?>
                                                 </span>
                                                 <span class="badge bg-secondary">Qty: <?php echo $book['quantity']; ?></span>
@@ -999,25 +1277,25 @@ include '../includes/header.php';
                                             </small>
                                         </div>
                                         
-                                        <!-- Enhanced Action Buttons with Dropdown for Multiple Records -->
-                                        <div class="book-actions">
+                                        <!-- Action Buttons -->
+                                        <div class="book-actions" onclick="event.stopPropagation();">
                                             <?php if (count($book['record_ids']) > 1): ?>
-                                                <!-- Multiple records - show dropdown -->
                                                 <div class="btn-group w-100" role="group">
                                                     <button type="button" class="btn btn-success btn-sm" 
-                                                            onclick="confirmRestoreAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                            onclick="event.stopPropagation(); confirmRestoreAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
                                                         <i class="fas fa-undo me-1"></i>Restore All
                                                     </button>
                                                     <button type="button" class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split" 
-                                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                                            data-bs-toggle="dropdown" aria-expanded="false"
+                                                            onclick="event.stopPropagation();">
                                                         <span class="visually-hidden">Toggle Dropdown</span>
                                                     </button>
-                                                    <ul class="dropdown-menu">
+                                                    <ul class="dropdown-menu" onclick="event.stopPropagation();">
                                                         <li><h6 class="dropdown-header">Manage Records</h6></li>
                                                         <?php foreach ($book['record_ids'] as $index => $recordId): ?>
                                                             <li>
                                                                 <a class="dropdown-item" href="#" 
-                                                                   onclick="restoreBook(<?php echo $recordId; ?>)">
+                                                                   onclick="event.preventDefault(); event.stopPropagation(); restoreBook(<?php echo $recordId; ?>)">
                                                                     <i class="fas fa-undo me-2"></i>Restore Record #<?php echo $recordId; ?>
                                                                 </a>
                                                             </li>
@@ -1025,21 +1303,20 @@ include '../includes/header.php';
                                                         <li><hr class="dropdown-divider"></li>
                                                         <li>
                                                             <a class="dropdown-item text-danger" href="#" 
-                                                               onclick="confirmDeleteAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                               onclick="event.preventDefault(); event.stopPropagation(); confirmDeleteAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
                                                                 <i class="fas fa-trash me-2"></i>Delete All Permanently
                                                             </a>
                                                         </li>
                                                     </ul>
                                                 </div>
                                             <?php else: ?>
-                                                <!-- Single record - regular buttons -->
                                                 <div class="d-grid gap-1">
                                                     <button type="button" class="btn btn-success btn-sm" 
-                                                            onclick="restoreBook(<?php echo $book['id']; ?>)">
+                                                            onclick="event.stopPropagation(); restoreBook(<?php echo $book['id']; ?>)">
                                                         <i class="fas fa-undo me-1"></i>Restore
                                                     </button>
                                                     <button type="button" class="btn btn-danger btn-sm" 
-                                                            onclick="confirmDelete(<?php echo $book['id']; ?>, '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>', permanentDeleteBook)">
+                                                            onclick="event.stopPropagation(); confirmDelete(<?php echo $book['id']; ?>, '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>', permanentDeleteBook)">
                                                         <i class="fas fa-trash me-1"></i>Delete Permanently
                                                     </button>
                                                 </div>
@@ -1055,127 +1332,17 @@ include '../includes/header.php';
         <?php endif; ?>
     </div>
 
-    <!-- Eligible for Archive Tab -->
-    <div class="tab-pane fade <?php echo $tab === 'eligible' ? 'show active' : ''; ?>" id="eligible" role="tabpanel">
-        <!-- Group Controls for Eligible Books -->
-        <div class="card mb-4">
-            <div class="card-body">
-                <form method="GET" class="row align-items-end">
-                    <input type="hidden" name="tab" value="eligible">
-                    <div class="col-md-3 mb-2">
-                        <label class="form-label">Group by</label>
-                        <select class="form-control" name="group_by">
-                            <?php foreach ($groupOptions as $key => $option): ?>
-                                <?php if ($key !== 'archive_date'): // Archive date not relevant for eligible books ?>
-                                    <option value="<?php echo $key; ?>" <?php echo ($groupBy == $key) ? 'selected' : ''; ?>>
-                                        <?php echo $option['name']; ?>
-                                    </option>
-                                <?php endif; ?>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-2 mb-2">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-layer-group me-1"></i>Group
-                        </button>
-                    </div>
-                    <div class="col-md-1 mb-2">
-                        <button type="button" class="btn btn-outline-info w-100" onclick="toggleAllGroups()" title="Expand/Collapse All">
-                            <i class="fas fa-expand-arrows-alt"></i>
-                        </button>
-                    </div>
-                    <div class="col-md-6 mb-2 text-end">
-                        <?php if (!empty($eligibleBooks)): ?>
-                            <div class="alert alert-warning d-inline-block mb-0 me-2">
-                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                <strong><?php echo array_sum(array_map('count', $eligibleBooks)); ?> books</strong> eligible for archiving
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </form>
-            </div>
+    <!-- Eligible for Archive Tab (keep existing code) -->
+    <!--<div class="tab-pane fade <?php echo $tab === 'eligible' ? 'show active' : ''; ?>" id="eligible" role="tabpanel">
+        <div class="text-center py-5">
+            <i class="fas fa-clock fa-3x text-muted mb-3"></i>
+            <h4 class="text-muted">Eligible books are automatically moved to Pending Archives</h4>
+            <p class="text-muted">Check the "Pending Archives" tab to review and archive books.</p>
         </div>
+    </div>-->
 
-        <?php if (empty($eligibleBooks)): ?>
-            <div class="text-center py-5">
-                <i class="fas fa-clock fa-3x text-warning mb-3"></i>
-                <h4 class="text-muted">No books eligible for archiving</h4>
-                <p class="text-muted">Books published before <?php echo date('Y') - 10; ?> will appear here.</p>
-            </div>
-        <?php else: ?>
-            <?php foreach ($eligibleBooks as $groupKey => $books): ?>
-                <div class="mb-4">
-                    <div class="group-header card border-warning">
-                        <div class="card-body py-3 group-collapse" data-bs-toggle="collapse" data-bs-target="#eligible-group-<?php echo md5($groupKey); ?>">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">
-                                    <i class="<?php echo $groupOptions[$groupBy]['icon']; ?> me-2"></i>
-                                    <?php 
-                                    if ($groupBy === 'category' && isset($departments[$groupKey])) {
-                                        echo $departments[$groupKey]['name'];
-                                    } else {
-                                        echo htmlspecialchars($groupKey);
-                                    }
-                                    ?>
-                                    <span class="badge bg-warning text-dark ms-2"><?php echo count($books); ?> books</span>
-                                </h5>
-                                <i class="fas fa-chevron-down"></i>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="collapse show" id="eligible-group-<?php echo md5($groupKey); ?>">
-                        <div class="book-grid">
-                            <?php foreach ($books as $book): ?>
-                                <div class="compact-card eligible-card">
-                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                        <h6 class="mb-1 flex-grow-1"><?php echo htmlspecialchars($book['title']); ?></h6>
-                                        <span class="badge bg-warning text-dark ms-2">ELIGIBLE</span>
-                                    </div>
-                                    
-                                    <p class="text-muted mb-1 small">
-                                        <i class="fas fa-user me-1"></i><?php echo htmlspecialchars($book['author']); ?>
-                                    </p>
-                                    
-                                    <?php if ($book['publication_year']): ?>
-                                        <?php 
-                                        $age = date('Y') - $book['publication_year'];
-                                        $ageClass = $age >= 50 ? 'age-ancient' : ($age >= 30 ? 'age-very-old' : 'age-old');
-                                        ?>
-                                        <p class="text-muted mb-2 small">
-                                            <i class="fas fa-calendar-alt me-1"></i><?php echo $book['publication_year']; ?>
-                                            <span class="book-age <?php echo $ageClass; ?> ms-2"><?php echo $age; ?>y</span>
-                                        </p>
-                                    <?php endif; ?>
-                                    
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge bg-<?php echo $departments[$book['category']]['color']; ?> me-1">
-                                            <?php echo $book['category']; ?>
-                                        </span>
-                                        <span class="badge bg-secondary">Qty: <?php echo $book['quantity']; ?></span>
-                                    </div>
-                                    
-                                    <div class="mt-3">
-                                        <form method="POST">
-                                            <input type="hidden" name="action" value="manual_archive">
-                                            <input type="hidden" name="id" value="<?php echo $book['id']; ?>">
-                                            <button type="submit" class="btn btn-sm btn-warning w-100" 
-                                                    onclick="return confirm('Archive this book now?')">
-                                                <i class="fas fa-archive me-1"></i>Archive Now
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
-    </div>
-
-    <!-- Statistics Tab -->
-    <div class="tab-pane fade <?php echo $tab === 'stats' ? 'show active' : ''; ?>" id="stats" role="tabpanel">
+    <!-- Statistics Tab (keep existing code) -->
+    <!--<div class="tab-pane fade <?php echo $tab === 'stats' ? 'show active' : ''; ?>" id="stats" role="tabpanel">
         <div class="row">
             <div class="col-md-6">
                 <div class="card">
@@ -1219,54 +1386,256 @@ include '../includes/header.php';
                 </div>
             </div>
         </div>
-        
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Archive Information</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <h6>Automatic Archiving</h6>
-                                <ul class="small text-muted">
-                                    <li>Books published 10+ years ago are eligible</li>
-                                    <li>Archiving preserves all book data</li>
-                                    <li>Archived books can be restored anytime</li>
-                                    <li>Archive history is maintained</li>
-                                </ul>
-                            </div>
-                            <div class="col-md-4">
-                                <h6>Archive Benefits</h6>
-                                <ul class="small text-muted">
-                                    <li>Reduces main database size</li>
-                                    <li>Improves query performance</li>
-                                    <li>Maintains historical records</li>
-                                    <li>Allows for data restoration</li>
-                                </ul>
-                            </div>
-                            <div class="col-md-4">
-                                <h6>Management Options</h6>
-                                <ul class="small text-muted">
-                                    <li>Manual archiving available</li>
-                                    <li>Bulk auto-archive function</li>
-                                    <li>Individual book restoration</li>
-                                    <li>Permanent deletion option</li>
-                                </ul>
-                            </div>
-                        </div>
-                        
-                        <div class="alert alert-info mt-3">
-                            <h6><i class="fas fa-lightbulb me-2"></i>Archive Policy</h6>
-                            <p class="mb-0">
-                                Books are automatically eligible for archiving after 10 years from their publication date. 
-                                This helps maintain an efficient library database while preserving historical records. 
-                                Archived books remain searchable and can be restored to active status at any time.
-                            </p>
-                        </div>
-                    </div>
+    </div>-->
+</div>
+
+<!-- Archive Reason Modal for Pending Books -->
+<div class="modal fade" id="archiveReasonModal" tabindex="-1" aria-labelledby="archiveReasonModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="archiveReasonModalLabel">
+                    <i class="fas fa-archive me-2"></i>Select Archive Reason
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="pendingBookDetailsSection">
+                    <!-- Pending book details will be populated here -->
                 </div>
+                
+                <hr>
+                
+                <h6 class="text-primary mb-3">
+                    <i class="fas fa-clipboard-list me-2"></i>Why is this book being archived?
+                </h6>
+                
+                <form id="archivePendingForm" method="POST">
+                    <input type="hidden" name="action" value="archive_pending">
+                    <input type="hidden" name="pending_id" id="modalPendingId">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select Archive Reason *</label>
+                        <div class="border rounded p-3 bg-light">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input pending-archive-reason" type="radio" name="archive_reason" value="Donated" id="pending_reason_donated">
+                                        <label class="form-check-label" for="pending_reason_donated">
+                                            <i class="fas fa-hands-helping text-success me-1"></i>Donated
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input pending-archive-reason" type="radio" name="archive_reason" value="Outdated" id="pending_reason_outdated">
+                                        <label class="form-check-label" for="pending_reason_outdated">
+                                            <i class="fas fa-calendar-times text-warning me-1"></i>Outdated
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input pending-archive-reason" type="radio" name="archive_reason" value="Obsolete" id="pending_reason_obsolete">
+                                        <label class="form-check-label" for="pending_reason_obsolete">
+                                            <i class="fas fa-ban text-secondary me-1"></i>Obsolete
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input pending-archive-reason" type="radio" name="archive_reason" value="Damaged" id="pending_reason_damaged">
+                                        <label class="form-check-label" for="pending_reason_damaged">
+                                            <i class="fas fa-exclamation-triangle text-danger me-1"></i>Damaged
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input pending-archive-reason" type="radio" name="archive_reason" value="Lost" id="pending_reason_lost">
+                                        <label class="form-check-label" for="pending_reason_lost">
+                                            <i class="fas fa-search text-muted me-1"></i>Lost
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input pending-archive-reason" type="radio" name="archive_reason" value="Low usage" id="pending_reason_low_usage">
+                                        <label class="form-check-label" for="pending_reason_low_usage">
+                                            <i class="fas fa-chart-line text-info me-1"></i>Low usage
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input pending-archive-reason" type="radio" name="archive_reason" value="Availability of more recent edition" id="pending_reason_recent_edition">
+                                        <label class="form-check-label" for="pending_reason_recent_edition">
+                                            <i class="fas fa-sync-alt text-primary me-1"></i>Availability of more recent edition
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input pending-archive-reason" type="radio" name="archive_reason" value="Title ceased publication" id="pending_reason_ceased">
+                                        <label class="form-check-label" for="pending_reason_ceased">
+                                            <i class="fas fa-stop-circle text-dark me-1"></i>Title ceased publication
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Others option -->
+                            <div class="form-check mb-2">
+                                <input class="form-check-input pending-archive-reason" type="radio" name="archive_reason" value="custom" id="pending_reason_others">
+                                <label class="form-check-label" for="pending_reason_others">
+                                    <i class="fas fa-edit text-secondary me-1"></i>Others:
+                                </label>
+                            </div>
+                            
+                            <!-- Custom reason text area -->
+                            <div class="mt-3" id="pendingCustomReasonSection" style="display: none;">
+                                <label for="pendingCustomArchiveReason" class="form-label small text-muted">
+                                    <i class="fas fa-pencil-alt me-1"></i>Please specify the reason:
+                                </label>
+                                <textarea class="form-control form-control-sm" 
+                                        id="pendingCustomArchiveReason" 
+                                        name="custom_archive_reason" 
+                                        rows="2" 
+                                        placeholder="Enter your custom archive reason here..."
+                                        maxlength="200"></textarea>
+                                <small class="text-muted">Maximum 200 characters</small>
+                                <div class="small text-muted mt-1" id="pendingCustomReasonCounter">0/200 characters</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <small>This book will be moved to the archived collection with the selected reason.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-warning" onclick="submitPendingArchive()">
+                    <i class="fas fa-archive me-1"></i>Archive Now
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Update Archive Reason Modal (for already archived books) -->
+<div class="modal fade" id="updateArchiveReasonModal" tabindex="-1" aria-labelledby="updateArchiveReasonModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title" id="updateArchiveReasonModalLabel">
+                    <i class="fas fa-edit me-2"></i>Update Archive Reason
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="archivedBookDetailsSection">
+                    <!-- Archived book details will be populated here -->
+                </div>
+                
+                <hr>
+                
+                <h6 class="text-primary mb-3">
+                    <i class="fas fa-edit me-2"></i>Update Archive Reason
+                </h6>
+                
+                <form id="updateArchiveReasonForm" method="POST">
+                    <input type="hidden" name="action" value="update_archive_reason">
+                    <input type="hidden" name="book_ids" id="modalBookIds">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select New Archive Reason *</label>
+                        <div class="border rounded p-3 bg-light">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input update-archive-reason" type="radio" name="new_archive_reason" value="Donated" id="update_reason_donated">
+                                        <label class="form-check-label" for="update_reason_donated">
+                                            <i class="fas fa-hands-helping text-success me-1"></i>Donated
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input update-archive-reason" type="radio" name="new_archive_reason" value="Outdated" id="update_reason_outdated">
+                                        <label class="form-check-label" for="update_reason_outdated">
+                                            <i class="fas fa-calendar-times text-warning me-1"></i>Outdated
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input update-archive-reason" type="radio" name="new_archive_reason" value="Obsolete" id="update_reason_obsolete">
+                                        <label class="form-check-label" for="update_reason_obsolete">
+                                            <i class="fas fa-ban text-secondary me-1"></i>Obsolete
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input update-archive-reason" type="radio" name="new_archive_reason" value="Damaged" id="update_reason_damaged">
+                                        <label class="form-check-label" for="update_reason_damaged">
+                                            <i class="fas fa-exclamation-triangle text-danger me-1"></i>Damaged
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input update-archive-reason" type="radio" name="new_archive_reason" value="Lost" id="update_reason_lost">
+                                        <label class="form-check-label" for="update_reason_lost">
+                                            <i class="fas fa-search text-muted me-1"></i>Lost
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input update-archive-reason" type="radio" name="new_archive_reason" value="Low usage" id="update_reason_low_usage">
+                                        <label class="form-check-label" for="update_reason_low_usage">
+                                            <i class="fas fa-chart-line text-info me-1"></i>Low usage
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input update-archive-reason" type="radio" name="new_archive_reason" value="Availability of more recent edition" id="update_reason_recent_edition">
+                                        <label class="form-check-label" for="update_reason_recent_edition">
+                                            <i class="fas fa-sync-alt text-primary me-1"></i>Availability of more recent edition
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input update-archive-reason" type="radio" name="new_archive_reason" value="Title ceased publication" id="update_reason_ceased">
+                                        <label class="form-check-label" for="update_reason_ceased">
+                                            <i class="fas fa-stop-circle text-dark me-1"></i>Title ceased publication
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Others option -->
+                            <div class="form-check mb-2">
+                                <input class="form-check-input update-archive-reason" type="radio" name="new_archive_reason" value="custom" id="update_reason_others">
+                                <label class="form-check-label" for="update_reason_others">
+                                    <i class="fas fa-edit text-secondary me-1"></i>Others:
+                                </label>
+                            </div>
+                            
+                            <!-- Custom reason text area -->
+                            <div class="mt-3" id="updateCustomReasonSection" style="display: none;">
+                                <label for="updateCustomArchiveReason" class="form-label small text-muted">
+                                    <i class="fas fa-pencil-alt me-1"></i>Please specify the reason:
+                                </label>
+                                <textarea class="form-control form-control-sm" 
+                                        id="updateCustomArchiveReason" 
+                                        name="custom_new_archive_reason" 
+                                        rows="2" 
+                                        placeholder="Enter your custom archive reason here..."
+                                        maxlength="200"></textarea>
+                                <small class="text-muted">Maximum 200 characters</small>
+                                <div class="small text-muted mt-1" id="updateCustomReasonCounter">0/200 characters</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <small>Updating the archive reason will apply to all copies of this book.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Close
+                </button>
+                <button type="button" class="btn btn-primary" onclick="submitArchiveReasonUpdate()">
+                    <i class="fas fa-save me-1"></i>Update Reason
+                </button>
             </div>
         </div>
     </div>
@@ -1276,7 +1645,7 @@ include '../includes/header.php';
 // Tab navigation with URL parameters
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
-    const activeTab = urlParams.get('tab') || 'archived';
+    const activeTab = urlParams.get('tab') || 'pending';
     
     // Activate the correct tab
     const tabElement = document.getElementById(activeTab + '-tab');
@@ -1295,19 +1664,41 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Auto-refresh notification for eligible books
-    const eligibleCount = <?php echo array_sum(array_map('count', $eligibleBooks)); ?>;
-    if (eligibleCount > 0) {
-        showArchiveNotification(eligibleCount);
+    // Auto-refresh notification for pending books
+    const pendingCount = <?php echo $pendingCount; ?>;
+    if (pendingCount > 0) {
+        showPendingNotification(pendingCount);
     }
     
     // Initialize collapse icons
     updateCollapseIcons();
 });
 
+// Show notification for pending books
+function showPendingNotification(count) {
+    if (count > 0) {
+        const notification = document.createElement('div');
+        notification.className = 'alert alert-warning alert-dismissible fade show position-fixed';
+        notification.style.cssText = 'top: 20px; right: 20px; z-index: 1050; max-width: 350px;';
+        notification.innerHTML = `
+            <i class="fas fa-hourglass-half me-2"></i>
+            <strong>${count} books</strong> are waiting to be archived! Click on them to select an archive reason.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(notification);
+        
+        // Auto-hide after 10 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 10000);
+    }
+}
+
 // Group management functions
 function toggleAllGroups() {
-    const collapseElements = document.querySelectorAll('[id^="archived-group-"], [id^="eligible-group-"]');
+    const collapseElements = document.querySelectorAll('[id^="archived-group-"], [id^="pending-group-"], [id^="eligible-group-"]');
     const allExpanded = Array.from(collapseElements).every(el => el.classList.contains('show'));
     
     collapseElements.forEach(el => {
@@ -1342,29 +1733,304 @@ function updateCollapseIcons() {
 document.addEventListener('shown.bs.collapse', updateCollapseIcons);
 document.addEventListener('hidden.bs.collapse', updateCollapseIcons);
 
-// Show notification for books eligible for archiving
-function showArchiveNotification(count) {
-    if (count > 10) {
-        const notification = document.createElement('div');
-        notification.className = 'alert alert-warning alert-dismissible fade show position-fixed';
-        notification.style.cssText = 'top: 20px; right: 20px; z-index: 1050; max-width: 350px;';
-        notification.innerHTML = `
-            <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>${count} books</strong> are eligible for archiving!
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        document.body.appendChild(notification);
+// Open archive reason modal for pending book
+function openArchiveReasonModal(pendingId) {
+    // Get pending book card
+    const pendingCard = document.querySelector(`[data-pending-id="${pendingId}"]`);
+    
+    if (pendingCard) {
+        const bookTitle = pendingCard.dataset.bookTitle || 'Unknown';
+        const bookAuthor = pendingCard.dataset.bookAuthor || 'Unknown';
+        const bookISBN = pendingCard.dataset.bookIsbn || 'N/A';
+        const bookYear = pendingCard.dataset.bookYear || 'N/A';
+        const bookCategory = pendingCard.dataset.bookCategory || 'N/A';
+        const bookQuantity = pendingCard.dataset.bookQuantity || '1';
         
-        // Auto-hide after 10 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.remove();
-            }
-        }, 10000);
+        // Populate modal with book details
+        const bookDetailsSection = document.getElementById('pendingBookDetailsSection');
+        bookDetailsSection.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h5 class="text-primary mb-3">${bookTitle}</h5>
+                    <p><strong>Author:</strong> ${bookAuthor}</p>
+                    <p><strong>ISBN/Call No.:</strong> ${bookISBN}</p>
+                    <p><strong>Publication:</strong> ${bookYear}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Department:</strong> <span class="badge bg-primary">${bookCategory}</span></p>
+                    <p><strong>Total Copies:</strong> <span class="badge bg-success">${bookQuantity}</span></p>
+                    <div class="alert alert-warning mb-0">
+                        <i class="fas fa-clock me-2"></i><strong>Pending Archive</strong><br>
+                        <small>This book is 5+ years old and needs to be archived.</small>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Store pending ID in hidden field
+        document.getElementById('modalPendingId').value = pendingId;
+        
+        // Reset form
+        document.querySelectorAll('.pending-archive-reason').forEach(radio => radio.checked = false);
+        document.getElementById('pendingCustomReasonSection').style.display = 'none';
+        document.getElementById('pendingCustomArchiveReason').value = '';
+        
+        // Reset all label styles
+        document.querySelectorAll('.pending-archive-reason + label').forEach(label => {
+            label.classList.remove('text-primary', 'fw-bold');
+        });
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('archiveReasonModal'));
+        modal.show();
     }
 }
 
-// Enhanced JavaScript functions for book management
+// Handle pending archive reason selection
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('pending-archive-reason')) {
+        const customSection = document.getElementById('pendingCustomReasonSection');
+        const customTextArea = document.getElementById('pendingCustomArchiveReason');
+        
+        if (e.target.value === 'custom') {
+            customSection.style.display = 'block';
+            customTextArea.setAttribute('required', 'required');
+            customSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            customSection.style.display = 'none';
+            customTextArea.removeAttribute('required');
+            customTextArea.value = '';
+        }
+        
+        // Update visual feedback
+        const selectedLabel = e.target.nextElementSibling;
+        const allLabels = document.querySelectorAll('.pending-archive-reason + label');
+        
+        allLabels.forEach(label => {
+            label.classList.remove('text-primary', 'fw-bold');
+        });
+        
+        if (selectedLabel) {
+            selectedLabel.classList.add('text-primary', 'fw-bold');
+        }
+    }
+});
+
+// Handle update archive reason selection
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('update-archive-reason')) {
+        const customSection = document.getElementById('updateCustomReasonSection');
+        const customTextArea = document.getElementById('updateCustomArchiveReason');
+        
+        if (e.target.value === 'custom') {
+            customSection.style.display = 'block';
+            customTextArea.setAttribute('required', 'required');
+            customSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            customSection.style.display = 'none';
+            customTextArea.removeAttribute('required');
+            customTextArea.value = '';
+        }
+        
+        // Update visual feedback
+        const selectedLabel = e.target.nextElementSibling;
+        const allLabels = document.querySelectorAll('.update-archive-reason + label');
+        
+        allLabels.forEach(label => {
+            label.classList.remove('text-primary', 'fw-bold');
+        });
+        
+        if (selectedLabel) {
+            selectedLabel.classList.add('text-primary', 'fw-bold');
+        }
+    }
+});
+
+// Character counter for pending custom archive reason
+document.getElementById('pendingCustomArchiveReason')?.addEventListener('input', function() {
+    const maxLength = 200;
+    const currentLength = this.value.length;
+    const counter = document.getElementById('pendingCustomReasonCounter');
+    
+    if (counter) {
+        counter.textContent = `${currentLength}/${maxLength} characters`;
+        
+        if (currentLength > maxLength) {
+            counter.className = 'small text-danger mt-1';
+            this.classList.add('is-invalid');
+        } else if (currentLength > 160) {
+            counter.className = 'small text-warning mt-1';
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+        } else {
+            counter.className = 'small text-muted mt-1';
+            this.classList.remove('is-invalid', 'is-valid');
+        }
+    }
+});
+
+// Character counter for update custom archive reason
+document.getElementById('updateCustomArchiveReason')?.addEventListener('input', function() {
+    const maxLength = 200;
+    const currentLength = this.value.length;
+    const counter = document.getElementById('updateCustomReasonCounter');
+    
+    if (counter) {
+        counter.textContent = `${currentLength}/${maxLength} characters`;
+        
+        if (currentLength > maxLength) {
+            counter.className = 'small text-danger mt-1';
+            this.classList.add('is-invalid');
+        } else if (currentLength > 160) {
+            counter.className = 'small text-warning mt-1';
+            this.classList.remove('is-invalid');
+            this.classList.add('is-valid');
+        } else {
+            counter.className = 'small text-muted mt-1';
+            this.classList.remove('is-invalid', 'is-valid');
+        }
+    }
+});
+
+// Submit pending archive with reason
+function submitPendingArchive() {
+    const selectedReason = document.querySelector('input[name="archive_reason"]:checked');
+    
+    if (!selectedReason) {
+        alert('Please select an archive reason.');
+        return;
+    }
+    
+    let reasonValue = selectedReason.value;
+    
+    // If custom reason selected, get the custom text
+    if (reasonValue === 'custom') {
+        const customReason = document.getElementById('pendingCustomArchiveReason').value.trim();
+        if (!customReason) {
+            alert('Please provide a custom archive reason.');
+            document.getElementById('pendingCustomArchiveReason').focus();
+            return;
+        }
+        reasonValue = customReason;
+    }
+    
+    // Update the form value and submit
+    const form = document.getElementById('archivePendingForm');
+    
+    // Create a new hidden input with the final reason value
+    const reasonInput = document.createElement('input');
+    reasonInput.type = 'hidden';
+    reasonInput.name = 'final_archive_reason';
+    reasonInput.value = reasonValue;
+    form.appendChild(reasonInput);
+    
+    // Submit the form
+    form.submit();
+}
+
+// Open update archive reason modal for archived book
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.archive-card.clickable-card').forEach(card => {
+        card.addEventListener('click', function(e) {
+            if (e.target.closest('button') || 
+                e.target.closest('.dropdown-menu') || 
+                e.target.closest('.btn') ||
+                e.target.closest('.book-actions')) {
+                return;
+            }
+            
+            const bookTitle = this.dataset.bookTitle || 'Unknown';
+            const bookAuthor = this.dataset.bookAuthor || 'Unknown';
+            const bookISBN = this.dataset.bookIsbn || 'N/A';
+            const bookYear = this.dataset.bookYear || 'N/A';
+            const bookCategory = this.dataset.bookCategory || 'N/A';
+            const bookQuantity = this.dataset.bookQuantity || '1';
+            const archiveReason = this.dataset.archiveReason || 'Not specified';
+            const bookIds = this.dataset.bookIds || '';
+            
+            const bookDetailsSection = document.getElementById('archivedBookDetailsSection');
+            bookDetailsSection.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="text-primary mb-3">${bookTitle}</h5>
+                        <p><strong>Author:</strong> ${bookAuthor}</p>
+                        <p><strong>ISBN/Call No.:</strong> ${bookISBN}</p>
+                        <p><strong>Publication:</strong> ${bookYear}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Department:</strong> <span class="badge bg-primary">${bookCategory}</span></p>
+                        <p><strong>Total Copies:</strong> <span class="badge bg-success">${bookQuantity}</span></p>
+                        <p><strong>Current Archive Reason:</strong></p>
+                        <div class="alert alert-secondary mb-0">
+                            <i class="fas fa-archive me-2"></i>${archiveReason}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalBookIds').value = bookIds;
+            
+            document.querySelectorAll('.update-archive-reason').forEach(radio => radio.checked = false);
+            document.getElementById('updateCustomReasonSection').style.display = 'none';
+            document.getElementById('updateCustomArchiveReason').value = '';
+            
+            document.querySelectorAll('.update-archive-reason + label').forEach(label => {
+                label.classList.remove('text-primary', 'fw-bold');
+            });
+            
+            const modal = new bootstrap.Modal(document.getElementById('updateArchiveReasonModal'));
+            modal.show();
+        });
+    });
+});
+
+// Submit archive reason update
+function submitArchiveReasonUpdate() {
+    const selectedReason = document.querySelector('input[name="new_archive_reason"]:checked');
+    
+    if (!selectedReason) {
+        alert('Please select an archive reason.');
+        return;
+    }
+    
+    let reasonValue = selectedReason.value;
+    
+    if (reasonValue === 'custom') {
+        const customReason = document.getElementById('updateCustomArchiveReason').value.trim();
+        if (!customReason) {
+            alert('Please provide a custom archive reason.');
+            document.getElementById('updateCustomArchiveReason').focus();
+            return;
+        }
+        reasonValue = customReason;
+    }
+    
+    const form = document.getElementById('updateArchiveReasonForm');
+    
+    const reasonInput = document.createElement('input');
+    reasonInput.type = 'hidden';
+    reasonInput.name = 'final_archive_reason';
+    reasonInput.value = reasonValue;
+    form.appendChild(reasonInput);
+    
+    form.submit();
+}
+
+// Delete pending book
+function deletePendingBook(id, title) {
+    if (confirm(`Are you sure you want to remove "${title}" from pending archives?\n\nYou can always add it again later.`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="action" value="delete_pending">
+            <input type="hidden" name="id" value="${id}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Existing functions for archived books
 function confirmDelete(id, title, callback) {
     if (confirm(`Are you sure you want to permanently delete "${title}"?\n\nThis action cannot be undone.`)) {
         callback(id);
@@ -1383,14 +2049,7 @@ function confirmRestoreAll(ids, title) {
     }
 }
 
-function confirmArchiveAll(ids, title) {
-    if (confirm(`Are you sure you want to archive all ${ids.length} records of "${title}"?`)) {
-        archiveMultipleBooks(ids);
-    }
-}
-
 function restoreBook(id) {
-    // Create a form and submit it
     const form = document.createElement('form');
     form.method = 'POST';
     form.innerHTML = `
@@ -1402,7 +2061,6 @@ function restoreBook(id) {
 }
 
 function permanentDeleteBook(id) {
-    // Create a form and submit it
     const form = document.createElement('form');
     form.method = 'POST';
     form.innerHTML = `
@@ -1413,21 +2071,7 @@ function permanentDeleteBook(id) {
     form.submit();
 }
 
-function archiveBook(id) {
-    // Create a form and submit it
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.innerHTML = `
-        <input type="hidden" name="action" value="manual_archive">
-        <input type="hidden" name="id" value="${id}">
-    `;
-    document.body.appendChild(form);
-    form.submit();
-}
-
 function restoreMultipleBooks(ids) {
-    // For now, restore them one by one
-    // In a real implementation, you might want to add a bulk restore action
     ids.forEach((id, index) => {
         setTimeout(() => {
             restoreBook(id);
@@ -1436,8 +2080,6 @@ function restoreMultipleBooks(ids) {
 }
 
 function deleteMultipleBooks(ids) {
-    // For now, delete them one by one
-    // In a real implementation, you might want to add a bulk delete action
     ids.forEach((id, index) => {
         setTimeout(() => {
             permanentDeleteBook(id);
@@ -1445,108 +2087,20 @@ function deleteMultipleBooks(ids) {
     });
 }
 
-function archiveMultipleBooks(ids) {
-    // For now, archive them one by one
-    // In a real implementation, you might want to add a bulk archive action
-    ids.forEach((id, index) => {
-        setTimeout(() => {
-            archiveBook(id);
-        }, index * 100);
-    });
-}
-
-// Auto-archive progress tracking
-function trackArchiveProgress() {
-    const progressBar = document.createElement('div');
-    progressBar.className = 'progress position-fixed';
-    progressBar.style.cssText = 'top: 0; left: 0; right: 0; height: 4px; z-index: 1060;';
-    progressBar.innerHTML = '<div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>';
-    document.body.appendChild(progressBar);
-    
-    let width = 0;
-    const interval = setInterval(() => {
-        width += Math.random() * 15;
-        if (width >= 100) {
-            width = 100;
-            clearInterval(interval);
-            setTimeout(() => progressBar.remove(), 500);
-        }
-        progressBar.querySelector('.progress-bar').style.width = width + '%';
-    }, 100);
-}
-
-// Search functionality enhancement
-function enhanceSearch() {
-    const searchInput = document.querySelector('input[name="search"]');
-    if (searchInput) {
-        let searchTimeout;
-        searchInput.addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                // Auto-submit search after 500ms of no typing
-                if (this.value.length > 2 || this.value.length === 0) {
-                    this.form.submit();
-                }
-            }, 500);
-        });
-    }
-}
-
-// Initialize enhancements
+// Click handler for pending cards to open modal
 document.addEventListener('DOMContentLoaded', function() {
-    enhanceSearch();
-    
-    // Add loading states to buttons
-    document.querySelectorAll('form[method="POST"]').forEach(form => {
-        form.addEventListener('submit', function() {
-            const submitBtn = form.querySelector('button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                const originalText = submitBtn.innerHTML;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>' + 
-                    (submitBtn.textContent.includes('Auto Archive') ? 'Archiving...' : 'Processing...');
-                
-                if (submitBtn.textContent.includes('Auto Archive')) {
-                    trackArchiveProgress();
-                }
-                
-                // Re-enable button after 3 seconds (in case of page reload failure)
-                setTimeout(() => {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = originalText;
-                }, 3000);
+    document.querySelectorAll('.pending-card').forEach(card => {
+        card.addEventListener('click', function(e) {
+            // Don't trigger if clicking on buttons
+            if (e.target.closest('button') || e.target.closest('.book-actions')) {
+                return;
+            }
+            
+            const pendingId = this.dataset.pendingId;
+            if (pendingId) {
+                openArchiveReasonModal(pendingId);
             }
         });
-    });
-    
-    // Add tooltips for academic contexts
-    const contexts = document.querySelectorAll('.academic-contexts');
-    contexts.forEach(context => {
-        if (context.scrollHeight > context.clientHeight) {
-            context.setAttribute('title', 'Scroll to see more academic contexts');
-        }
-    });
-    
-    // Add stagger animation to book cards
-    const bookCards = document.querySelectorAll('.book-card');
-    bookCards.forEach((card, index) => {
-        card.style.animationDelay = `${index * 0.1}s`;
-        card.classList.add('fade-in');
-    });
-    
-    // Add smooth scrolling to group headers
-    document.querySelectorAll('.group-collapse').forEach(header => {
-        header.addEventListener('click', function() {
-            setTimeout(() => {
-                this.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-        });
-    });
-    
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-    tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 });
 
@@ -1568,39 +2122,23 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Export archive data
-function exportArchiveData() {
-    const data = {
-        archived_books: <?php echo json_encode($archivedBooks); ?>,
-        eligible_books: <?php echo json_encode($eligibleBooks); ?>,
-        stats: <?php echo json_encode($archiveStats); ?>,
-        export_date: new Date().toISOString()
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'archive_data_' + new Date().toISOString().slice(0, 10) + '.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
     if (e.ctrlKey) {
         switch(e.key) {
             case '1':
                 e.preventDefault();
-                document.getElementById('archived-tab').click();
+                document.getElementById('pending-tab').click();
                 break;
             case '2':
                 e.preventDefault();
-                document.getElementById('eligible-tab').click();
+                document.getElementById('archived-tab').click();
                 break;
             case '3':
+                e.preventDefault();
+                document.getElementById('eligible-tab').click();
+                break;
+            case '4':
                 e.preventDefault();
                 document.getElementById('stats-tab').click();
                 break;
@@ -1611,72 +2149,6 @@ document.addEventListener('keydown', function(e) {
         }
     }
 });
-
-// Group filtering and sorting
-function filterGroups(searchTerm) {
-    const groups = document.querySelectorAll('[id^="archived-group-"], [id^="eligible-group-"]');
-    groups.forEach(group => {
-        const header = document.querySelector(`[data-bs-target="#${group.id}"]`);
-        if (header) {
-            const groupTitle = header.textContent.toLowerCase();
-            const shouldShow = groupTitle.includes(searchTerm.toLowerCase());
-            header.closest('.mb-4').style.display = shouldShow ? 'block' : 'none';
-        }
-    });
-}
-
-// Bulk operations
-function selectAllInGroup(groupId) {
-    const checkboxes = document.querySelectorAll(`#${groupId} input[type="checkbox"]`);
-    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-    
-    checkboxes.forEach(cb => {
-        cb.checked = !allChecked;
-    });
-    
-    updateBulkActions();
-}
-
-function updateBulkActions() {
-    const checkedBoxes = document.querySelectorAll('input[type="checkbox"]:checked');
-    const bulkActionsContainer = document.getElementById('bulk-actions');
-    
-    if (bulkActionsContainer) {
-        bulkActionsContainer.style.display = checkedBoxes.length > 0 ? 'block' : 'none';
-        document.getElementById('selected-count').textContent = checkedBoxes.length;
-    }
-}
-
-// Print functionality
-function printArchiveReport() {
-    const printContent = document.querySelector('.tab-pane.active').cloneNode(true);
-    const printWindow = window.open('', '_blank');
-    
-    printWindow.document.write(`
-        <html>
-        <head>
-            <title>Archive Report - ${new Date().toLocaleDateString()}</title>
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-            <style>
-                @media print {
-                    .btn, .form-control, .card-header { display: none !important; }
-                    .compact-card { border: 1px solid #000; margin-bottom: 10px; }
-                    body { font-size: 12px; }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container-fluid">
-                <h1>Archive Report - ${new Date().toLocaleDateString()}</h1>
-                ${printContent.innerHTML}
-            </div>
-        </body>
-        </html>
-    `);
-    
-    printWindow.document.close();
-    printWindow.print();
-}
 
 // Auto-save user preferences
 function saveUserPreferences() {
@@ -1691,7 +2163,6 @@ function saveUserPreferences() {
 function loadUserPreferences() {
     const preferences = JSON.parse(localStorage.getItem('archivePreferences') || '{}');
     
-    // Restore group by selection
     if (preferences.groupBy) {
         const groupBySelect = document.querySelector('select[name="group_by"]');
         if (groupBySelect) {
@@ -1699,7 +2170,6 @@ function loadUserPreferences() {
         }
     }
     
-    // Restore expanded groups
     if (preferences.expandedGroups) {
         setTimeout(() => {
             preferences.expandedGroups.forEach(groupId => {
@@ -1717,6 +2187,52 @@ window.addEventListener('beforeunload', saveUserPreferences);
 
 // Load preferences on page load
 document.addEventListener('DOMContentLoaded', loadUserPreferences);
+
+// Add stagger animation to book cards
+document.addEventListener('DOMContentLoaded', function() {
+    const bookCards = document.querySelectorAll('.book-card');
+    bookCards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 0.05}s`;
+        card.classList.add('fade-in');
+    });
+});
+
+// Search functionality enhancement
+function enhanceSearch() {
+    const searchInput = document.querySelector('input[name="search"]');
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                if (this.value.length > 2 || this.value.length === 0) {
+                    this.form.submit();
+                }
+            }, 500);
+        });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', enhanceSearch);
+
+// Add loading states to buttons
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('form[method="POST"]').forEach(form => {
+        form.addEventListener('submit', function() {
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+                
+                setTimeout(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }, 3000);
+            }
+        });
+    });
+});
 </script>
 
 <?php include '../includes/footer.php'; ?>
