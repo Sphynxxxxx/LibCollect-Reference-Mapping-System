@@ -26,15 +26,15 @@ $viewsPath = $isInViews ? '' : 'views/';
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'books.php') ? 'active' : ''; ?>" href="<?php echo $viewsPath; ?>books.php">
-                    <i class="fas fa-book"></i>
-                    <span class="nav-text">Manage Books</span>
-                </a>
-            </li>
-            <li class="nav-item">
                 <a class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'add-book.php') ? 'active' : ''; ?>" href="<?php echo $viewsPath; ?>add-book.php">
                     <i class="fas fa-plus-circle"></i>
                     <span class="nav-text">Add Book</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'books.php') ? 'active' : ''; ?>" href="<?php echo $viewsPath; ?>books.php">
+                    <i class="fas fa-book"></i>
+                    <span class="nav-text">Manage Books</span>
                 </a>
             </li>
             <li class="nav-item">

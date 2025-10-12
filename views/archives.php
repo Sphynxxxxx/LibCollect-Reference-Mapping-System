@@ -1753,7 +1753,7 @@ function openArchiveReasonModal(pendingId) {
                 <div class="col-md-6">
                     <h5 class="text-primary mb-3">${bookTitle}</h5>
                     <p><strong>Author:</strong> ${bookAuthor}</p>
-                    <p><strong>ISBN/Call No.:</strong> ${bookISBN}</p>
+                    <p><strong>Call No.:</strong> ${bookISBN}</p>
                     <p><strong>Publication:</strong> ${bookYear}</p>
                 </div>
                 <div class="col-md-6">

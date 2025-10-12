@@ -983,10 +983,10 @@ include '../includes/header.php';
                                         <?php else: ?>
                                             <!-- Single record - regular buttons -->
                                             <div class="d-grid gap-1">
-                                                <a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
+                                                <!--<a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
                                                 class="btn btn-outline-info btn-sm">
                                                     <i class="fas fa-eye me-1"></i>View Details
-                                                </a>
+                                                </a>-->
                                                 <a href="edit-book.php?id=<?php echo $book_item['id']; ?>" 
                                                 class="btn btn-outline-primary btn-sm">
                                                     <i class="fas fa-edit me-1"></i>Edit

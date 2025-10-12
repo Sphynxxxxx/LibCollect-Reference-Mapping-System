@@ -15,14 +15,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $categories = isset($_POST['category']) ? $_POST['category'] : [];
     $year_levels = isset($_POST['year_level']) ? $_POST['year_level'] : [];
     $semesters = isset($_POST['semester']) ? $_POST['semester'] : [];
-    $sections = isset($_POST['section']) ? (is_array($_POST['section']) ? $_POST['section'] : explode(',', $_POST['section'])) : [];
-    
-    // Clean up sections array (remove empty values and trim)
-    $sections = array_filter(array_map('trim', $sections));
     
     $success_count = 0;
     $error_count = 0;
-    $pending_count = 0; // Changed from archived_count to pending_count
+    $pending_count = 0;
     $total_quantity = $_POST['quantity'];
     
     // Handle ISBN data - could be single ISBN or array of ISBNs
@@ -63,7 +59,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $categories_str = !empty($categories) ? implode(',', $categories) : '';
         $year_levels_str = !empty($year_levels) ? implode(',', $year_levels) : '';
         $semesters_str = !empty($semesters) ? implode(',', $semesters) : '';
-        $sections_str = !empty($sections) ? implode(',', $sections) : '';
         
         // Create single record per physical book with all applicable contexts
         $data = [
@@ -75,13 +70,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             'description' => $_POST['description'],
             'subject_name' => $_POST['subject_name'] ?? '',
             'semester' => $semesters_str,
-            'section' => $sections_str,
+            'section' => '',
             'year_level' => $year_levels_str,
             'course_code' => $_POST['course_code'] ?? '',
             'publication_year' => $publication_year,
             'book_copy_number' => $i + 1,
             'total_quantity' => $total_quantity,
-            'is_multi_context' => (count($categories) > 1 || count($year_levels) > 1 || count($semesters) > 1 || count($sections) > 1) ? 1 : 0,
+            'is_multi_context' => (count($categories) > 1 || count($year_levels) > 1 || count($semesters) > 1) ? 1 : 0,
             'same_book_series' => $same_book ? 1 : 0
         ];
         
@@ -139,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $book_type = $same_book ? "copies of the same book" : "individual books";
         
         // Calculate total academic contexts
-        $total_contexts = count($categories) * count($year_levels) * count($semesters) * count($sections);
+        $total_contexts = count($categories) * count($year_levels) * count($semesters);
         $context_info = "";
         if ($total_contexts > 1) {
             $context_info = " (applicable to {$total_contexts} academic contexts)";
@@ -167,7 +162,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if (count($categories) > 1) $context_details[] = count($categories) . " departments";
             if (count($year_levels) > 1) $context_details[] = count($year_levels) . " year levels";
             if (count($semesters) > 1) $context_details[] = count($semesters) . " semesters";
-            if (count($sections) > 1) $context_details[] = count($sections) . " sections";
             
             $_SESSION['context_info'] = [
                 'details' => implode(', ', $context_details),
@@ -237,18 +231,31 @@ include '../includes/header.php';
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Quantity *</label>
                                 <input type="number" class="form-control" name="quantity" id="quantityInput" min="1" value="1" required>
                                 <small class="text-muted">Number of physical book copies</small>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Publication Year</label>
                                 <input type="number" class="form-control" name="publication_year" id="publicationYear" 
                                        min="1800" max="2030" placeholder="e.g., 2024">
                                 <small class="text-muted">Year the book was published</small>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Same Book for All?</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="sameBookToggle" checked>
+                                    <label class="form-check-label" for="sameBookToggle">
+                                        All copies are the same book
+                                    </label>
+                                </div>
+                                <small class="text-muted">Toggle if you're adding different books</small>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
                                 <label class="form-label">Department/Category *</label>
                                 <div class="border rounded p-2" style="max-height: 120px; overflow-y: auto;">
                                     <div class="form-check">
@@ -277,16 +284,6 @@ include '../includes/header.php';
                                     </div>
                                 </div>
                                 <small class="text-muted">Select applicable departments</small>
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Same Book for All?</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="sameBookToggle" checked>
-                                    <label class="form-check-label" for="sameBookToggle">
-                                        All copies are the same book
-                                    </label>
-                                </div>
-                                <small class="text-muted">Toggle if you're adding different books</small>
                             </div>
                         </div>
                         
@@ -326,7 +323,7 @@ include '../includes/header.php';
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-6 mb-3">
                                 <label class="form-label">Year Level</label>
                                 <div class="border rounded p-2" style="max-height: 100px; overflow-y: auto;">
                                     <div class="form-check">
@@ -352,7 +349,7 @@ include '../includes/header.php';
                                 </div>
                                 <small class="text-muted">Select applicable year levels</small>
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-6 mb-3">
                                 <label class="form-label">Semester</label>
                                 <div class="border rounded p-2" style="max-height: 100px; overflow-y: auto;">
                                     <div class="form-check">
@@ -373,12 +370,6 @@ include '../includes/header.php';
                                     </div>
                                 </div>
                                 <small class="text-muted">Select applicable semesters</small>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">Section(s)</label>
-                                <input type="text" class="form-control" name="section" 
-                                       placeholder="e.g., A, B, 1A, 2B (comma-separated)">
-                                <small class="text-muted">Separate multiple sections with commas</small>
                             </div>
                         </div>
                     </div>
@@ -407,9 +398,9 @@ include '../includes/header.php';
                         <button type="submit" class="btn btn-success">
                             <i class="fas fa-save me-1"></i>Add Book to Collection
                         </button>
-                        <!--<button type="button" class="btn btn-info" id="previewBtn">
+                        <button type="button" class="btn btn-info" id="previewBtn">
                             <i class="fas fa-eye me-1"></i>Preview Records
-                        </button>-->
+                        </button>
                         <button type="reset" class="btn btn-outline-warning">
                             <i class="fas fa-redo me-1"></i>Reset Form
                         </button>
@@ -473,7 +464,6 @@ include '../includes/header.php';
 
                 <h6 class="mt-3">Examples:</h6>
                 <ul class="small text-muted">
-                    <li><strong>Section:</strong> <code>A, B, C</code> or <code>1A, 1B, 2A</code></li>
                     <li><strong>Course Code:</strong> <code>MATH-101</code> or <code>COMP-301</code></li>
                     <li><strong>Year:</strong> <code>2024</code> or <code>2023</code></li>
                 </ul>
@@ -483,182 +473,16 @@ include '../includes/header.php';
 </div>
 
 <script>
-// Form validation
-document.getElementById('addBookForm').addEventListener('submit', function(e) {
-    const title = document.querySelector('input[name="title"]').value.trim();
-    const author = document.querySelector('input[name="author"]').value.trim();
-    const categories = document.querySelectorAll('input[name="category[]"]:checked');
-    
-    if (!title || !author || categories.length === 0) {
-        e.preventDefault();
-        alert('Please fill in all required fields (Title, Author, and at least one Category).');
-        return false;
-    }
-    
-    // Validate publication year if provided
-    const pubYear = document.getElementById('publicationYear').value;
-    if (pubYear && (pubYear < 1800 || pubYear > 2030)) {
-        e.preventDefault();
-        alert('Publication year must be between 1800 and 2030.');
-        return false;
-    }
-    
-    // Show loading state
-    const submitBtn = document.querySelector('button[type="submit"]');
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Adding Book(s)...';
-    submitBtn.disabled = true;
-});
-
-// Auto-fill current year for publication year
-document.getElementById('publicationYear').addEventListener('focus', function() {
-    if (!this.value) {
-        const currentYear = new Date().getFullYear();
-        this.placeholder = `Current year: ${currentYear}`;
-    }
-});
-
-// Check if book will be sent to pending archives
-function checkAutoArchiveStatus() {
-    const publicationYear = document.getElementById('publicationYear').value;
-    const currentYear = new Date().getFullYear();
-    const autoArchiveNotice = document.getElementById('autoArchiveNotice');
-    
-    if (publicationYear && (currentYear - parseInt(publicationYear)) >= 5) {
-        autoArchiveNotice.style.display = 'block';
-        autoArchiveNotice.className = 'alert alert-warning';
-        autoArchiveNotice.innerHTML = `
-            <i class="fas fa-hourglass-half me-2"></i>
-            <strong>Pending Archive:</strong> This book (published in ${publicationYear}) will be sent to Pending Archives (5+ years old). 
-            You'll need to select an archive reason in the Archives page before it's officially archived.
-        `;
-    } else {
-        autoArchiveNotice.style.display = 'none';
-    }
-}
-
-// Event listener for publication year changes
-document.getElementById('publicationYear').addEventListener('input', function() {
-    checkAutoArchiveStatus();
-    
-    // Also update the preview if it's visible
-    if (document.getElementById('previewSection').style.display !== 'none') {
-        document.getElementById('previewBtn').click();
-    }
-});
-
-// Updated Preview functionality
-document.getElementById('previewBtn').addEventListener('click', function() {
-    const categories = Array.from(document.querySelectorAll('input[name="category[]"]:checked')).map(cb => cb.value);
-    const yearLevels = Array.from(document.querySelectorAll('input[name="year_level[]"]:checked')).map(cb => cb.value);
-    const semesters = Array.from(document.querySelectorAll('input[name="semester[]"]:checked')).map(cb => cb.value);
-    const sectionsInput = document.querySelector('input[name="section"]').value.trim();
-    const sections = sectionsInput ? sectionsInput.split(',').map(s => s.trim()).filter(s => s) : [];
-    const totalQuantity = parseInt(document.querySelector('input[name="quantity"]').value) || 1;
-    const sameBook = document.getElementById('sameBookToggle').checked;
-    const publicationYear = document.getElementById('publicationYear').value;
-    
-    // Get ISBN data
-    const isbnInputs = document.querySelectorAll('.isbn-input');
-    const isbnData = Array.from(isbnInputs).map(input => input.value.trim()).filter(isbn => isbn);
-    
-    // Calculate academic contexts
-    const finalCategories = categories.length > 0 ? categories : ['Not specified'];
-    const finalYearLevels = yearLevels.length > 0 ? yearLevels : ['Not specified'];
-    const finalSemesters = semesters.length > 0 ? semesters : ['Not specified'];
-    const finalSections = sections.length > 0 ? sections : ['Not specified'];
-    
-    const totalContexts = finalCategories.length * finalYearLevels.length * finalSemesters.length * finalSections.length;
-    
-    // Check if will be auto-archived
-    const currentYear = new Date().getFullYear();
-    const willAutoArchive = publicationYear && (currentYear - parseInt(publicationYear)) >= 5;
-    
-    // Update preview
-    document.getElementById('physicalCopies').textContent = totalQuantity;
-    document.getElementById('contextCount').textContent = totalContexts;
-    
-    // Generate preview list
-    const previewList = document.getElementById('previewList');
-    let previewHTML = '<div class="row">';
-    
-    // Show book copies
-    previewHTML += '<div class="col-md-6"><h6 class="text-primary">Physical Book Copies:</h6><ul class="list-unstyled">';
-    for (let i = 1; i <= totalQuantity; i++) {
-        const bookISBN = sameBook && isbnData.length > 0 ? isbnData[0] : 
-                        (isbnData[i - 1] || 'No ISBN');
-        previewHTML += `
-            <li class="mb-2 p-2 bg-light rounded">
-                <span class="badge ${sameBook ? 'bg-success' : 'bg-primary'} me-2">
-                    ${sameBook ? 'Copy' : 'Book'} ${i}
-                </span>
-                ${bookISBN !== 'No ISBN' ? 
-                    `<span class="badge bg-secondary ms-1">${bookISBN}</span>` : ''}
-                ${publicationYear ? 
-                    `<span class="badge bg-info ms-1">${publicationYear}</span>` : ''}
-                ${willAutoArchive ? 
-                    `<span class="badge bg-warning text-dark ms-1"><i class="fas fa-archive"></i> Auto-Archive</span>` : ''}
-            </li>`;
-    }
-    previewHTML += '</ul></div>';
-    
-    // Show applicable contexts
-    previewHTML += '<div class="col-md-6"><h6 class="text-success">Applicable Academic Contexts:</h6>';
-    if (totalContexts <= 10) {
-        previewHTML += '<ul class="list-unstyled small">';
-        finalCategories.forEach(category => {
-            finalYearLevels.forEach(yearLevel => {
-                finalSemesters.forEach(semester => {
-                    finalSections.forEach(section => {
-                        previewHTML += `
-                            <li class="mb-1 p-1 bg-success bg-opacity-10 rounded">
-                                <strong>${category}</strong> - ${yearLevel} - ${semester} - Section ${section}
-                            </li>`;
-                    });
-                });
-            });
-        });
-        previewHTML += '</ul>';
-    } else {
-        previewHTML += `<div class="alert alert-info">
-                <small>Too many contexts to display individually (${totalContexts} total)</small>
-            </div>
-            <ul class="list-unstyled small">
-                <li><strong>Departments:</strong> ${finalCategories.join(', ')}</li>
-                <li><strong>Year Levels:</strong> ${finalYearLevels.join(', ')}</li>
-                <li><strong>Semesters:</strong> ${finalSemesters.join(', ')}</li>
-                <li><strong>Sections:</strong> ${finalSections.join(', ')}</li>
-            </ul>`;
-    }
-    previewHTML += '</div></div>';
-    
-    // Add summary information
-    previewHTML += `<div class="col-12 mt-3">
-        <div class="alert ${willAutoArchive ? 'alert-warning' : 'alert-success'}">
-            <h6 class="mb-2"><i class="fas fa-${willAutoArchive ? 'hourglass-half' : 'check-circle'} me-2"></i>Summary</h6>
-            <ul class="mb-0 small">
-                <li><strong>${totalQuantity}</strong> physical book ${totalQuantity === 1 ? 'copy' : 'copies'} will be added</li>
-                <li>Each copy applicable to <strong>${totalContexts}</strong> academic context${totalContexts === 1 ? '' : 's'}</li>
-                ${willAutoArchive ? 
-                    '<li class="text-warning"><strong><i class="fas fa-hourglass-half"></i> Will be sent to Pending Archives</strong> (5+ years old - requires archive reason selection)</li>' : 
-                    '<li><strong>Will be added to active collection</strong></li>'}
-                <li><strong>No duplicate copies</strong> - only real physical books are created</li>
-                <li><strong>Maximum availability</strong> - books usable across all selected contexts</li>
-            </ul>
-        </div>
-    </div>`;
-    
-    previewHTML += '</div>';
-    previewList.innerHTML = previewHTML;
-    
-    document.getElementById('previewSection').style.display = 'block';
-    document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
-});
-
-// Dynamic ISBN field generation
+// Dynamic ISBN field generation function
 function generateISBNFields() {
     const quantity = parseInt(document.getElementById('quantityInput').value) || 1;
     const sameBook = document.getElementById('sameBookToggle').checked;
     const container = document.getElementById('isbnContainer');
+    
+    if (!container) {
+        console.error('ISBN container not found!');
+        return;
+    }
     
     container.innerHTML = '';
     
@@ -689,7 +513,7 @@ function generateISBNFields() {
                             <i class="fas fa-book me-1"></i>Book ${i}
                         </span>
                         <input type="text" class="form-control isbn-input" name="isbn[]" 
-                               placeholder="Enter ISBN for book ${i}" data-book-index="${i}">
+                               placeholder="Enter Call No. for book ${i}" data-book-index="${i}">
                     </div>
                 </div>
             `;
@@ -699,9 +523,10 @@ function generateISBNFields() {
         
         document.getElementById('isbnHelperText').innerHTML = 
             `<i class="fas fa-books text-warning me-1"></i>
-             ${quantity} different books - each can have unique ISBN`;
+             ${quantity} different books - each can have unique Call No.`;
     }
     
+    // Add event listeners to new inputs
     container.querySelectorAll('.isbn-input').forEach(input => {
         input.addEventListener('input', formatISBN);
     });
@@ -718,14 +543,36 @@ function formatISBN(event) {
     }
 }
 
-// Event listeners
-document.getElementById('quantityInput').addEventListener('input', generateISBNFields);
-document.getElementById('sameBookToggle').addEventListener('change', generateISBNFields);
+// Check if book will be sent to pending archives
+function checkAutoArchiveStatus() {
+    const publicationYear = document.getElementById('publicationYear').value;
+    const currentYear = new Date().getFullYear();
+    const autoArchiveNotice = document.getElementById('autoArchiveNotice');
+    
+    if (publicationYear && (currentYear - parseInt(publicationYear)) >= 5) {
+        autoArchiveNotice.style.display = 'block';
+        autoArchiveNotice.className = 'alert alert-warning';
+        autoArchiveNotice.innerHTML = `
+            <i class="fas fa-hourglass-half me-2"></i>
+            <strong>Pending Archive:</strong> This book (published in ${publicationYear}) will be sent to Pending Archives (5+ years old). 
+            You'll need to select an archive reason in the Archives page before it's officially archived.
+        `;
+    } else {
+        autoArchiveNotice.style.display = 'none';
+    }
+}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing...');
+    
+    // Generate ISBN fields immediately on page load
     generateISBNFields();
     checkAutoArchiveStatus();
+    
+    // Set up event listeners
+    document.getElementById('quantityInput').addEventListener('input', generateISBNFields);
+    document.getElementById('sameBookToggle').addEventListener('change', generateISBNFields);
     
     const currentYear = new Date().getFullYear();
     document.getElementById('publicationYear').setAttribute('placeholder', `e.g., ${currentYear}`);
@@ -742,6 +589,154 @@ document.addEventListener('DOMContentLoaded', function() {
             checkbox.setAttribute('title', checkboxGroups[name]);
         });
     });
+});
+
+// Form validation
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('addBookForm').addEventListener('submit', function(e) {
+        const title = document.querySelector('input[name="title"]').value.trim();
+        const author = document.querySelector('input[name="author"]').value.trim();
+        const categories = document.querySelectorAll('input[name="category[]"]:checked');
+        
+        if (!title || !author || categories.length === 0) {
+            e.preventDefault();
+            alert('Please fill in all required fields (Title, Author, and at least one Category).');
+            return false;
+        }
+        
+        // Validate publication year if provided
+        const pubYear = document.getElementById('publicationYear').value;
+        if (pubYear && (pubYear < 1800 || pubYear > 2030)) {
+            e.preventDefault();
+            alert('Publication year must be between 1800 and 2030.');
+            return false;
+        }
+        
+        // Show loading state
+        const submitBtn = document.querySelector('button[type="submit"]');
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Adding Book(s)...';
+        submitBtn.disabled = true;
+    });
+});
+
+// Auto-fill current year for publication year
+document.getElementById('publicationYear').addEventListener('focus', function() {
+    if (!this.value) {
+        const currentYear = new Date().getFullYear();
+        this.placeholder = `Current year: ${currentYear}`;
+    }
+});
+
+// Event listener for publication year changes
+document.getElementById('publicationYear').addEventListener('input', function() {
+    checkAutoArchiveStatus();
+    
+    // Also update the preview if it's visible
+    if (document.getElementById('previewSection').style.display !== 'none') {
+        document.getElementById('previewBtn').click();
+    }
+});
+
+// Updated Preview functionality
+document.getElementById('previewBtn').addEventListener('click', function() {
+    const categories = Array.from(document.querySelectorAll('input[name="category[]"]:checked')).map(cb => cb.value);
+    const yearLevels = Array.from(document.querySelectorAll('input[name="year_level[]"]:checked')).map(cb => cb.value);
+    const semesters = Array.from(document.querySelectorAll('input[name="semester[]"]:checked')).map(cb => cb.value);
+    const totalQuantity = parseInt(document.querySelector('input[name="quantity"]').value) || 1;
+    const sameBook = document.getElementById('sameBookToggle').checked;
+    const publicationYear = document.getElementById('publicationYear').value;
+    
+    // Get ISBN data
+    const isbnInputs = document.querySelectorAll('.isbn-input');
+    const isbnData = Array.from(isbnInputs).map(input => input.value.trim()).filter(isbn => isbn);
+    
+    // Calculate academic contexts
+    const finalCategories = categories.length > 0 ? categories : ['Not specified'];
+    const finalYearLevels = yearLevels.length > 0 ? yearLevels : ['Not specified'];
+    const finalSemesters = semesters.length > 0 ? semesters : ['Not specified'];
+    
+    const totalContexts = finalCategories.length * finalYearLevels.length * finalSemesters.length;
+    
+    // Check if will be auto-archived
+    const currentYear = new Date().getFullYear();
+    const willAutoArchive = publicationYear && (currentYear - parseInt(publicationYear)) >= 5;
+    
+    // Update preview
+    document.getElementById('physicalCopies').textContent = totalQuantity;
+    document.getElementById('contextCount').textContent = totalContexts;
+    
+    // Generate preview list
+    const previewList = document.getElementById('previewList');
+    let previewHTML = '<div class="row">';
+    
+    // Show book copies
+    previewHTML += '<div class="col-md-6"><h6 class="text-primary">Physical Book Copies:</h6><ul class="list-unstyled">';
+    for (let i = 1; i <= totalQuantity; i++) {
+        const bookISBN = sameBook && isbnData.length > 0 ? isbnData[0] : 
+                        (isbnData[i - 1] || 'No Call No.');
+        previewHTML += `
+            <li class="mb-2 p-2 bg-light rounded">
+                <span class="badge ${sameBook ? 'bg-success' : 'bg-primary'} me-2">
+                    ${sameBook ? 'Copy' : 'Book'} ${i}
+                </span>
+                ${bookISBN !== 'No Call No.' ? 
+                    `<span class="badge bg-secondary ms-1">${bookISBN}</span>` : ''}
+                ${publicationYear ? 
+                    `<span class="badge bg-info ms-1">${publicationYear}</span>` : ''}
+                ${willAutoArchive ? 
+                    `<span class="badge bg-warning text-dark ms-1"><i class="fas fa-archive"></i> Auto-Archive</span>` : ''}
+            </li>`;
+    }
+    previewHTML += '</ul></div>';
+    
+    // Show applicable contexts
+    previewHTML += '<div class="col-md-6"><h6 class="text-success">Applicable Academic Contexts:</h6>';
+    if (totalContexts <= 10) {
+        previewHTML += '<ul class="list-unstyled small">';
+        finalCategories.forEach(category => {
+            finalYearLevels.forEach(yearLevel => {
+                finalSemesters.forEach(semester => {
+                    previewHTML += `
+                        <li class="mb-1 p-1 bg-success bg-opacity-10 rounded">
+                            <strong>${category}</strong> - ${yearLevel} - ${semester}
+                        </li>`;
+                });
+            });
+        });
+        previewHTML += '</ul>';
+    } else {
+        previewHTML += `<div class="alert alert-info">
+                <small>Too many contexts to display individually (${totalContexts} total)</small>
+            </div>
+            <ul class="list-unstyled small">
+                <li><strong>Departments:</strong> ${finalCategories.join(', ')}</li>
+                <li><strong>Year Levels:</strong> ${finalYearLevels.join(', ')}</li>
+                <li><strong>Semesters:</strong> ${finalSemesters.join(', ')}</li>
+            </ul>`;
+    }
+    previewHTML += '</div></div>';
+    
+    // Add summary information
+    previewHTML += `<div class="col-12 mt-3">
+        <div class="alert ${willAutoArchive ? 'alert-warning' : 'alert-success'}">
+            <h6 class="mb-2"><i class="fas fa-${willAutoArchive ? 'hourglass-half' : 'check-circle'} me-2"></i>Summary</h6>
+            <ul class="mb-0 small">
+                <li><strong>${totalQuantity}</strong> physical book ${totalQuantity === 1 ? 'copy' : 'copies'} will be added</li>
+                <li>Each copy applicable to <strong>${totalContexts}</strong> academic context${totalContexts === 1 ? '' : 's'}</li>
+                ${willAutoArchive ? 
+                    '<li class="text-warning"><strong><i class="fas fa-hourglass-half"></i> Will be sent to Pending Archives</strong> (5+ years old - requires archive reason selection)</li>' : 
+                    '<li><strong>Will be added to active collection</strong></li>'}
+                <li><strong>No duplicate copies</strong> - only real physical books are created</li>
+                <li><strong>Maximum availability</strong> - books usable across all selected contexts</li>
+            </ul>
+        </div>
+    </div>`;
+    
+    previewHTML += '</div>';
+    previewList.innerHTML = previewHTML;
+    
+    document.getElementById('previewSection').style.display = 'block';
+    document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
 });
 
 // Character counter for description
@@ -814,7 +809,7 @@ document.querySelector('button[type="reset"]').addEventListener('click', functio
 
 // Update preview when selections change
 document.addEventListener('change', function(e) {
-    if (e.target.type === 'checkbox' || e.target.name === 'section' || e.target.id === 'quantityInput' || e.target.id === 'publicationYear') {
+    if (e.target.type === 'checkbox' || e.target.id === 'quantityInput' || e.target.id === 'publicationYear') {
         document.getElementById('previewSection').style.display = 'none';
         
         if (e.target.id === 'quantityInput') {
@@ -823,25 +818,6 @@ document.addEventListener('change', function(e) {
     }
 });
 
-// Quick fill suggestions for academic fields
-const quickFillSuggestions = {
-    'BIT': {
-        subjects: ['Industrial Safety', 'Electronics', 'Mechanical Engineering', 'Manufacturing Technology', 'Quality Control'],
-        courseCodes: ['BIT-101', 'BIT-201', 'BIT-301', 'BIT-401']
-    },
-    'EDUCATION': {
-        subjects: ['Educational Psychology', 'Teaching Methods', 'Curriculum Development', 'Assessment Strategies', 'Child Development'],
-        courseCodes: ['EDUC-101', 'EDUC-201', 'EDUC-301', 'EDUC-401']
-    },
-    'HBM': {
-        subjects: ['Hotel Management', 'Business Administration', 'Tourism', 'Event Management', 'Customer Service'],
-        courseCodes: ['HBM-101', 'HBM-201', 'HBM-301', 'HBM-401']
-    },
-    'COMPSTUD': {
-        subjects: ['Programming', 'Database Systems', 'Web Development', 'Data Structures', 'Computer Networks'],
-        courseCodes: ['COMP-101', 'COMP-201', 'COMP-301', 'COMP-401']
-    }
-};
 
 // Add suggestions when category is selected
 document.addEventListener('change', function(e) {
@@ -892,7 +868,7 @@ document.addEventListener('change', function(e) {
     if (e.target.type === 'checkbox' && e.target.name.includes('[]')) {
         const groupName = e.target.name;
         const checkedCount = document.querySelectorAll(`input[name="${groupName}"]:checked`).length;
-        const container = e.target.closest('.border.rounded') || e.target.closest('.col-md-3, .col-md-4');
+        const container = e.target.closest('.border.rounded') || e.target.closest('.col-md-6, .col-md-12');
         
         if (container) {
             const label = container.querySelector('label.form-label');
