@@ -9,66 +9,193 @@ $database = new Database();
 $pdo = $database->connect();
 $book = new Book($pdo);
 
+// Get filter parameters
 $department = $_GET['dept'] ?? 'all';
+$program = $_GET['program'] ?? '';
+$courseCode = $_GET['course_code'] ?? '';
+$yearLevel = $_GET['year_level'] ?? '';
+$semester = $_GET['semester'] ?? '';
 $isCustom = isset($_GET['custom']);
 
 // Get data
 $stats = $book->getBookStats();
 $allBooks = $book->getAllBooks();
 
-// Department information with course descriptions - Updated to match database categories
+// Department information with course descriptions
 $departments = [
     'BIT' => [
         'name' => 'Bachelor of Industrial Technology',
-        'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in ELECTRONICS TECHNOLOGY',
-        'description' => 'This course introduces the students to the basic occupational safety and health. The students will learn safe work practices and programs in preparation to specialty and general theories associated and physical encountered in the work. The course will also cover the equipment processing laws on OSH and facilities key concepts, principles and practices that are foundational knowledge, requirements, develop individual abilities and capacities on basic operations to become effective OSH programs and advancement in specialized OSH work in a working towards and corresponding specified measures in the workplace.',
+        'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY',
+        'description' => 'This course introduces the students to the basic occupational safety and health. The students will learn safe work practices and programs in preparation to specialty and general theories associated and physical encountered in the work.',
         'books' => []
     ],
     'EDUCATION' => [
         'name' => 'Education Department', 
         'full_name' => 'EDUCATION DEPARTMENT',
-        'description' => 'This course enables an introduction to theories and applications of primary educational devices involving electronic systems. The students will build comprehension in the content and performance presenting machine assembled which related OHMS Law and other fundamental basic electronic circuit analysis.',
+        'description' => 'This course enables an introduction to theories and applications of primary educational devices involving electronic systems.',
         'books' => []
     ],
     'HBM' => [
         'name' => 'Hotel and Business Management',
         'full_name' => 'HOTEL AND BUSINESS MANAGEMENT',
-        'description' => 'This program provides comprehensive training in hospitality and business management principles, covering hotel operations, customer service, financial management, and tourism industry practices.',
+        'description' => 'This program provides comprehensive training in hospitality and business management principles.',
         'books' => []
     ],
     'COMPSTUD' => [
         'name' => 'Computer Studies',
         'full_name' => 'COMPUTER STUDIES',
-        'description' => 'This course covers fundamental computing concepts, programming languages, software development, and information technology applications for modern business and academic environments.',
+        'description' => 'This course covers fundamental computing concepts, programming languages, software development.',
         'books' => []
     ]
 ];
 
-// Group books by department - Handle multi-context books
-foreach ($allBooks as $bookItem) {
-    // Handle multi-context books (books that belong to multiple departments)
+// Map program codes to full names
+$programNames = [
+    'BIT-Electrical' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in ELECTRICAL TECHNOLOGY',
+    'BIT-Electronics' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in ELECTRONICS TECHNOLOGY',
+    'BIT-Automotive' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in AUTOMOTIVE TECHNOLOGY',
+    'BIT-HVACR' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in HVAC/R TECHNOLOGY',
+    'BSIS' => 'BACHELOR OF SCIENCE IN INFORMATION SYSTEMS',
+    'BSIT' => 'BACHELOR OF SCIENCE IN INFORMATION TECHNOLOGY',
+    'BSHMCA' => 'BACHELOR OF SCIENCE IN HOSPITALITY MANAGEMENT - CULINARY ARTS',
+    'BSEntrep' => 'BACHELOR OF SCIENCE IN ENTREPRENEURSHIP',
+    'BSTM' => 'BACHELOR OF SCIENCE IN TOURISM MANAGEMENT',
+    'BTLEd-IA' => 'BACHELOR OF TECHNOLOGY AND LIVELIHOOD EDUCATION - INDUSTRIAL ARTS',
+    'BTLEd-HE' => 'BACHELOR OF TECHNOLOGY AND LIVELIHOOD EDUCATION - HOME ECONOMICS',
+    'BSED-Science' => 'BACHELOR OF SECONDARY EDUCATION - SCIENCE',
+    'BSED-Math' => 'BACHELOR OF SECONDARY EDUCATION - MATHEMATICS'
+];
+
+// Apply filters to books
+$filteredBooks = $allBooks;
+
+// Filter by program
+if (!empty($program)) {
+    $filteredBooks = array_filter($filteredBooks, function($book) use ($program) {
+        return !empty($book['program']) && trim($book['program']) === $program;
+    });
+}
+
+// Filter by course code
+if (!empty($courseCode)) {
+    $filteredBooks = array_filter($filteredBooks, function($book) use ($courseCode) {
+        return !empty($book['course_code']) && trim($book['course_code']) === $courseCode;
+    });
+}
+
+// Filter by year level
+if (!empty($yearLevel)) {
+    $filteredBooks = array_filter($filteredBooks, function($book) use ($yearLevel) {
+        if (empty($book['year_level'])) return false;
+        $yearLevels = array_map('trim', explode(',', $book['year_level']));
+        return in_array($yearLevel, $yearLevels);
+    });
+}
+
+// Filter by semester
+if (!empty($semester)) {
+    $filteredBooks = array_filter($filteredBooks, function($book) use ($semester) {
+        if (empty($book['semester'])) return false;
+        $semesters = array_map('trim', explode(',', $book['semester']));
+        return in_array($semester, $semesters);
+    });
+}
+
+// Group books by department AND by subject
+$departmentSubjects = [];
+foreach ($filteredBooks as $bookItem) {
     $categories = explode(',', $bookItem['category']);
     foreach ($categories as $category) {
         $category = trim($category);
         if (isset($departments[$category])) {
-            $departments[$category]['books'][] = $bookItem;
+            // Create subject key
+            $subjectKey = $bookItem['course_code'] . '|' . $bookItem['subject_name'];
+            
+            if (!isset($departmentSubjects[$category])) {
+                $departmentSubjects[$category] = [];
+            }
+            
+            if (!isset($departmentSubjects[$category][$subjectKey])) {
+                $departmentSubjects[$category][$subjectKey] = [
+                    'course_code' => $bookItem['course_code'],
+                    'subject_name' => $bookItem['subject_name'],
+                    'description' => $bookItem['description'] ?? '',
+                    'books' => []
+                ];
+            }
+            
+            $departmentSubjects[$category][$subjectKey]['books'][] = $bookItem;
         }
     }
 }
 
-// Determine what to print
-$reportTitle = '';
+// Determine what to print and get dynamic program title
+$reportTitle = 'LIST OF REFERENCES';
 $reportData = [];
+$dynamicProgramTitle = '';
+$showProgramTitle = false; 
+
+// Get dynamic program title - ONLY if specific filters are applied
+if (!empty($filteredBooks) && $department !== 'summary') {
+    // Only show program title if a SPECIFIC program is selected from the dropdown
+    if (!empty($program) && isset($programNames[$program])) {
+        $dynamicProgramTitle = $programNames[$program];
+        $showProgramTitle = true;
+    }
+    // Show ONLY department title if specific department selected but NO program filter
+    elseif ($department !== 'all' && isset($departments[$department]) && empty($program)) {
+        $dynamicProgramTitle = $departments[$department]['full_name'];
+        $showProgramTitle = true;
+    }
+    // Otherwise don't show any program title
+    else {
+        $showProgramTitle = false;
+        $dynamicProgramTitle = '';
+    }
+}
 
 if ($department === 'all') {
-    $reportTitle = 'LIST OF REFERENCES';
-    $reportData = $departments;
+    $reportData = $departmentSubjects;
+    $showProgramTitle = false; // Don't show for "All Departments"
+    $dynamicProgramTitle = '';
 } elseif ($department === 'summary') {
     $reportTitle = 'LIBRARY STATISTICS SUMMARY';
     $reportData = ['summary' => true];
+    $showProgramTitle = false;
+    $dynamicProgramTitle = '';
 } elseif (isset($departments[$department])) {
-    $reportTitle = 'LIST OF REFERENCES';
-    $reportData = [$department => $departments[$department]];
+    if (isset($departmentSubjects[$department])) {
+        $reportData = [$department => $departmentSubjects[$department]];
+    } else {
+        $reportData = [$department => []];
+    }
+    
+    // Only show title if program filter was specifically set
+    if (empty($program)) {
+        $dynamicProgramTitle = $departments[$department]['full_name'];
+        $showProgramTitle = true;
+    }
+}
+
+if ($department === 'all') {
+    $reportData = $departmentSubjects;
+    $showProgramTitle = false; // Don't show for "All Departments"
+} elseif ($department === 'summary') {
+    $reportTitle = 'LIBRARY STATISTICS SUMMARY';
+    $reportData = ['summary' => true];
+    $showProgramTitle = false;
+} elseif (isset($departments[$department])) {
+    if (isset($departmentSubjects[$department])) {
+        $reportData = [$department => $departmentSubjects[$department]];
+    } else {
+        $reportData = [$department => []];
+    }
+    
+    // Only set title if no specific program title was set AND program filter is empty
+    if (empty($dynamicProgramTitle) && empty($program)) {
+        $dynamicProgramTitle = $departments[$department]['full_name'];
+        $showProgramTitle = true;
+    }
 }
 
 $currentYear = date('Y');
@@ -151,7 +278,6 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             background-size: contain;
         }
 
-        /* Print-specific styles for logos */
         @media print {
             .logo-left {
                 background: url('../assets/images/ISATU Logo.png') no-repeat center !important;
@@ -199,6 +325,13 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             line-height: 1.3;
         }
 
+        .dynamic-program-title {
+            margin: 10px 0;
+            font-size: 10pt;
+            font-weight: bold;
+            line-height: 1.3;
+        }
+
         .academic-year {
             font-size: 10pt;
             font-weight: bold;
@@ -207,8 +340,8 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
 
         .semester-info {
             font-size: 10pt;
-            margin: 15px 0;
-            font-style: italic;
+            margin: 8px 0;
+            text-align: center;
         }
 
         /* Course Section */
@@ -293,6 +426,13 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             text-align: center;
         }
 
+        .no-data-message {
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+        }
+
         /* Page break handling */
         .page-break {
             page-break-before: always;
@@ -343,6 +483,33 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         .print-controls button.secondary:hover {
             background: #545b62;
         }
+
+        /* Footer logos */
+        .footer-logos {
+            margin-top: 30px;
+            text-align: center;
+            border-top: 1px solid #ccc;
+            padding-top: 15px;
+        }
+
+        .footer-logos img {
+            max-width: 800px; 
+            width: 100%;
+            max-height: 800px; 
+            height: 100%;
+            opacity: 0.8;
+            object-fit: contain;
+        }
+
+        @media print {
+            .footer-logos img {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                color-adjust: exact;
+                max-width: 800px;
+                max-height: 800px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -375,20 +542,35 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         </div>
 
         <div class="program-title">
-            <strong><?php echo $reportTitle; ?></strong><br>
-            <?php if ($department !== 'all' && $department !== 'summary' && isset($departments[$department])): ?>
-                <?php echo $departments[$department]['full_name']; ?><br>
-            <?php endif; ?>
+            <strong><?php echo $reportTitle; ?></strong>
         </div>
+
+        <?php if ($showProgramTitle && !empty($dynamicProgramTitle) && $department !== 'summary'): ?>
+        <div class="dynamic-program-title">
+            <?php echo $dynamicProgramTitle; ?>
+        </div>
+        <?php endif; ?>
 
         <div class="academic-year">
             <strong>ACADEMIC YEAR <?php echo $academicYear; ?></strong>
         </div>
 
-        <?php if ($department !== 'summary'): ?>
-        <!--<div class="semester-info">
-            <strong>First Year - First Semester</strong>
-        </div>-->
+        <?php if ($department !== 'summary' && (!empty($yearLevel) || !empty($semester))): ?>
+        <div class="semester-info">
+            <?php 
+            $semesterText = '';
+            if (!empty($yearLevel)) {
+                $semesterText .= $yearLevel;
+            }
+            if (!empty($semester)) {
+                if (!empty($yearLevel)) {
+                    $semesterText .= ' - ';
+                }
+                $semesterText .= $semester;
+            }
+            echo $semesterText;
+            ?>
+        </div>
         <?php endif; ?>
     </div>
 
@@ -411,13 +593,11 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                 </thead>
                 <tbody>
                     <?php 
-                    // Calculate totals for summary
                     $totalTitles = 0;
                     $totalVolumes = 0;
                     $deptStats = [];
                     
-                    // Count unique books per department (handle multi-context books)
-                    foreach ($allBooks as $bookItem) {
+                    foreach ($filteredBooks as $bookItem) {
                         $categories = explode(',', $bookItem['category']);
                         foreach ($categories as $category) {
                             $category = trim($category);
@@ -458,69 +638,90 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         </div>
 
     <?php else: ?>
-        <!-- Detailed Department Reports -->
-        <?php foreach ($reportData as $code => $dept): ?>
-            <div class="course-section <?php echo ($code !== array_key_first($reportData)) ? 'page-break' : ''; ?>">
+        <!-- Detailed Department Reports by Subject -->
+        <?php 
+        $sectionCounter = 0;
+        foreach ($reportData as $deptCode => $subjects): 
+            if (empty($subjects)) continue;
+            
+            foreach ($subjects as $subjectKey => $subjectData):
+                $sectionCounter++;
+        ?>
+            <div class="course-section <?php echo ($sectionCounter > 1) ? 'page-break' : ''; ?>">
                 <div class="course-header">
-                    <?php echo strtoupper($code); ?> <?php echo $dept['name']; ?>
+                    <?php 
+                    // Display course code and subject name
+                    echo strtoupper($subjectData['course_code']) . ' ' . $subjectData['subject_name'];
+                    ?>
                 </div>
                 
                 <div class="course-description">
-                    <?php echo $dept['description']; ?>
+                    <?php 
+                    // Display subject description or default department description
+                    echo !empty($subjectData['description']) ? $subjectData['description'] : $departments[$deptCode]['description'];
+                    ?>
                 </div>
 
-                <table class="references-table">
-                    <thead>
-                        <tr>
-                            <th class="call-no">Call No.</th>
-                            <th class="title">Title</th>
-                            <th class="author">Author</th>
-                            <th class="copyright">Copyright</th>
-                            <th class="copies">No. of Copies</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php 
-                        $bookNumber = 1;
-                        // Remove duplicates for single department view
-                        $uniqueBooks = [];
-                        foreach ($dept['books'] as $bookItem) {
-                            $bookKey = $bookItem['title'] . '|' . $bookItem['author'];
-                            if (!isset($uniqueBooks[$bookKey])) {
-                                $uniqueBooks[$bookKey] = $bookItem;
-                            } else {
-                                // Add quantities for duplicate books
-                                $uniqueBooks[$bookKey]['quantity'] += $bookItem['quantity'];
+                <?php if (empty($subjectData['books'])): ?>
+                    <div class="no-data-message">
+                        No books found for this subject.
+                    </div>
+                <?php else: ?>
+                    <table class="references-table">
+                        <thead>
+                            <tr>
+                                <th class="call-no">Call No.</th>
+                                <th class="title">Title</th>
+                                <th class="author">Author</th>
+                                <th class="copyright">Copyright</th>
+                                <th class="copies">No. of Copies</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $bookNumber = 1;
+                            $uniqueBooks = [];
+                            
+                            foreach ($subjectData['books'] as $bookItem) {
+                                $bookKey = $bookItem['title'] . '|' . $bookItem['author'];
+                                if (!isset($uniqueBooks[$bookKey])) {
+                                    $uniqueBooks[$bookKey] = $bookItem;
+                                } else {
+                                    $uniqueBooks[$bookKey]['quantity'] += $bookItem['quantity'];
+                                }
                             }
-                        }
-                        
-                        foreach ($uniqueBooks as $bookItem): 
-                        ?>
-                        <tr>
-                            <td class="call-no"><?php echo str_pad($bookNumber, 3, '0', STR_PAD_LEFT); ?></td>
-                            <td class="title"><?php echo htmlspecialchars($bookItem['title']); ?></td>
-                            <td class="author"><?php echo htmlspecialchars($bookItem['author']); ?></td>
-                            <td class="copyright"><?php echo $bookItem['publication_year'] ?? date('Y', strtotime($bookItem['created_at'])); ?></td>
-                            <td class="copies"><?php echo $bookItem['quantity']; ?></td>
-                        </tr>
-                        <?php 
-                        $bookNumber++;
-                        endforeach; 
-                        ?>
-                    </tbody>
-                    <tfoot>
-                        <tr class="table-footer">
-                            <td colspan="4"><strong>Total no. of Titles:</strong></td>
-                            <td class="total-cell"><strong><?php echo count($uniqueBooks); ?></strong></td>
-                        </tr>
-                        <tr class="table-footer">
-                            <td colspan="4"><strong>Total no. of Volumes:</strong></td>
-                            <td class="total-cell"><strong><?php echo array_sum(array_column($uniqueBooks, 'quantity')); ?></strong></td>
-                        </tr>
-                    </tfoot>
-                </table>
+                            
+                            foreach ($uniqueBooks as $bookItem): 
+                            ?>
+                            <tr>
+                                <td class="call-no"><?php echo !empty($bookItem['isbn']) ? htmlspecialchars($bookItem['isbn']) : str_pad($bookNumber, 3, '0', STR_PAD_LEFT); ?></td>
+                                <td class="title"><?php echo htmlspecialchars($bookItem['title']); ?></td>
+                                <td class="author"><?php echo htmlspecialchars($bookItem['author']); ?></td>
+                                <td class="copyright"><?php echo $bookItem['publication_year'] ?? date('Y', strtotime($bookItem['created_at'])); ?></td>
+                                <td class="copies"><?php echo $bookItem['quantity']; ?></td>
+                            </tr>
+                            <?php 
+                            $bookNumber++;
+                            endforeach; 
+                            ?>
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-footer">
+                                <td colspan="4"><strong>Total no. of Titles:</strong></td>
+                                <td class="total-cell"><strong><?php echo count($uniqueBooks); ?></strong></td>
+                            </tr>
+                            <tr class="table-footer">
+                                <td colspan="4"><strong>Total no. of Volumes:</strong></td>
+                                <td class="total-cell"><strong><?php echo array_sum(array_column($uniqueBooks, 'quantity')); ?></strong></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                <?php endif; ?>
             </div>
-        <?php endforeach; ?>
+        <?php 
+            endforeach;
+        endforeach; 
+        ?>
     <?php endif; ?>
 
     <!-- Footer with Partner Logos -->
@@ -528,22 +729,12 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         <div style="font-size: 8pt; color: #666; margin-bottom: 10px;">
             In partnership with leading educational institutions and organizations
         </div>
-        <!-- Placeholder for actual logos -->
-        <div style="display: flex; justify-content: center; align-items: center; gap: 15px; flex-wrap: wrap;">
-            <div style="width: 30px; height: 20px; background: #4285f4; border-radius: 3px;"></div>
-            <div style="width: 30px; height: 20px; background: #db4437; border-radius: 3px;"></div>
-            <div style="width: 30px; height: 20px; background: #f4b400; border-radius: 3px;"></div>
-            <div style="width: 30px; height: 20px; background: #0f9d58; border-radius: 3px;"></div>
-            <div style="width: 30px; height: 20px; background: #ab47bc; border-radius: 3px;"></div>
-            <div style="width: 30px; height: 20px; background: #00acc1; border-radius: 3px;"></div>
+        <div style="display: flex; justify-content: center; align-items: center;">
+            <img src="../assets/images/footer.png" alt="Partner Organizations" style="max-width: auto; height: auto; opacity: 0.8;">
         </div>
     </div>
 
     <script>
-        // Auto-print option (uncomment if needed)
-        // window.onload = function() { window.print(); }
-        
-        // Print function
         function printReport() {
             window.print();
         }

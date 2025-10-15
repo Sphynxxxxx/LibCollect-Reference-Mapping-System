@@ -33,6 +33,19 @@ try {
     $allBooks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+// Get all unique courses from the database (combining subject_name and course_code)
+$coursesQuery = "SELECT DISTINCT CONCAT(course_code, ' - ', subject_name) as course_display 
+                 FROM books 
+                 WHERE course_code IS NOT NULL AND course_code != '' 
+                 AND subject_name IS NOT NULL AND subject_name != ''
+                 ORDER BY course_code, subject_name";
+try {
+    $stmt = $pdo->query($coursesQuery);
+    $allCourses = $stmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (Exception $e) {
+    $allCourses = [];
+}
+
 // Process department data - updated to match your database categories
 $departments = [
     'BIT' => ['name' => 'Bachelor of Industrial Technology', 'books' => []],
@@ -173,8 +186,84 @@ try {
 // Handle print requests
 $printMode = isset($_GET['print']) ? $_GET['print'] : false;
 $department = isset($_GET['dept']) ? $_GET['dept'] : 'all';
+$program = isset($_GET['program']) ? $_GET['program'] : '';
+$courseCode = isset($_GET['course_code']) ? $_GET['course_code'] : '';
+$yearLevel = isset($_GET['year_level']) ? $_GET['year_level'] : '';
+$semester = isset($_GET['semester']) ? $_GET['semester'] : '';
+
+// Map program codes to full names for report headers
+$programNames = [
+    // BIT Programs
+    'BIT-Electrical' => [
+        'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in ELECTRICAL TECHNOLOGY',
+        'dept' => 'BIT'
+    ],
+    'BIT-Electronics' => [
+        'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in ELECTRONICS TECHNOLOGY',
+        'dept' => 'BIT'
+    ],
+    'BIT-Automotive' => [
+        'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in AUTOMOTIVE TECHNOLOGY',
+        'dept' => 'BIT'
+    ],
+    'BIT-HVACR' => [
+        'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in HVAC/R TECHNOLOGY',
+        'dept' => 'BIT'
+    ],
+    // Computer Studies Programs
+    'BSIS' => [
+        'full_name' => 'BACHELOR OF SCIENCE IN INFORMATION SYSTEMS',
+        'dept' => 'COMPSTUD'
+    ],
+    'BSIT' => [
+        'full_name' => 'BACHELOR OF SCIENCE IN INFORMATION TECHNOLOGY',
+        'dept' => 'COMPSTUD'
+    ],
+    // HBM Programs
+    'BSHMCA' => [
+        'full_name' => 'BACHELOR OF SCIENCE IN HOSPITALITY MANAGEMENT - CULINARY ARTS',
+        'dept' => 'HBM'
+    ],
+    'BSEntrep' => [
+        'full_name' => 'BACHELOR OF SCIENCE IN ENTREPRENEURSHIP',
+        'dept' => 'HBM'
+    ],
+    'BSTM' => [
+        'full_name' => 'BACHELOR OF SCIENCE IN TOURISM MANAGEMENT',
+        'dept' => 'HBM'
+    ],
+    // Education Programs
+    'BTLEd-IA' => [
+        'full_name' => 'BACHELOR OF TECHNOLOGY AND LIVELIHOOD EDUCATION - INDUSTRIAL ARTS',
+        'dept' => 'EDUCATION'
+    ],
+    'BTLEd-HE' => [
+        'full_name' => 'BACHELOR OF TECHNOLOGY AND LIVELIHOOD EDUCATION - HOME ECONOMICS',
+        'dept' => 'EDUCATION'
+    ],
+    'BSED-Science' => [
+        'full_name' => 'BACHELOR OF SECONDARY EDUCATION - SCIENCE',
+        'dept' => 'EDUCATION'
+    ],
+    'BSED-Math' => [
+        'full_name' => 'BACHELOR OF SECONDARY EDUCATION - MATHEMATICS',
+        'dept' => 'EDUCATION'
+    ]
+];
 
 if ($printMode) {
+    // Prepare print data with filters
+    $printData = [
+        'department' => $department,
+        'program' => $program,
+        'program_full_name' => isset($programNames[$program]) ? $programNames[$program]['full_name'] : '',
+        'course_code' => $courseCode,
+        'year_level' => $yearLevel,
+        'semester' => $semester,
+        'stats' => $stats,
+        'allBooks' => $allBooks
+    ];
+    
     // Print mode - different layout
     include 'print-report.php';
     exit;
@@ -304,25 +393,135 @@ include '../includes/header.php';
                 <h5 class="mb-0"><i class="fas fa-print me-2"></i>Department Reports</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted">Generate printable reports by department</p>
+                <p class="text-muted">Generate printable reports by department with optional filters</p>
                 <div class="d-grid gap-2">
                     <?php foreach ($departments as $code => $dept): ?>
-                        <a href="?print=true&dept=<?php echo $code; ?>" 
-                           class="btn btn-outline-primary text-start" 
-                           target="_blank">
-                            <i class="fas fa-file-alt me-2"></i>
-                            <?php echo $dept['name']; ?> Report
-                            <span class="badge bg-primary float-end"><?php echo count($dept['books']); ?> books</span>
-                        </a>
-                        <div class="btn-group w-100 mt-1" role="group">
-                            <a href="export-report.php?type=csv&dept=<?php echo $code; ?>&report=detailed" 
-                               class="btn btn-sm btn-outline-secondary">
-                                <i class="fas fa-file-csv"></i> CSV
+                        <div class="department-report-item mb-3">
+                            <a href="?print=true&dept=<?php echo $code; ?>" 
+                               class="btn btn-outline-primary text-start" 
+                               target="_blank">
+                                <i class="fas fa-file-alt me-2"></i>
+                                <?php echo $dept['name']; ?> Report
+                                <span class="badge bg-primary float-end"><?php echo count($dept['books']); ?> books</span>
                             </a>
-                            <a href="export-report.php?type=excel&dept=<?php echo $code; ?>&report=detailed" 
-                               class="btn btn-sm btn-outline-secondary">
-                                <i class="fas fa-file-excel"></i> Excel
-                            </a>
+                            
+                            <!-- Filter Options -->
+                            <div class="mt-2 p-2 bg-light rounded">
+                                <small class="text-muted d-block mb-2"><i class="fas fa-filter"></i> Filter by:</small>
+                                
+                                <!-- Program Filter -->
+                                <select class="form-select form-select-sm mb-2 program-filter" data-dept="<?php echo $code; ?>">
+                                    <option value="">All Programs</option>
+                                    <?php
+                                    // Get unique programs for this department
+                                    $deptPrograms = [];
+                                    foreach ($dept['books'] as $bookItem) {
+                                        if (!empty($bookItem['program'])) {
+                                            $program = trim($bookItem['program']);
+                                            if (!in_array($program, $deptPrograms)) {
+                                                $deptPrograms[] = $program;
+                                            }
+                                        }
+                                    }
+                                    sort($deptPrograms);
+                                    foreach ($deptPrograms as $program):
+                                    ?>
+                                        <option value="<?php echo htmlspecialchars($program); ?>"><?php echo htmlspecialchars($program); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                
+                                <!-- Course Code Filter -->
+                                <select class="form-select form-select-sm mb-2 course-code-filter" data-dept="<?php echo $code; ?>">
+                                    <option value="">All Course Codes</option>
+                                    <?php
+                                    // Get unique course codes for this department
+                                    $deptCourseCodes = [];
+                                    foreach ($dept['books'] as $bookItem) {
+                                        if (!empty($bookItem['course_code'])) {
+                                            $courseCode = trim($bookItem['course_code']);
+                                            if (!in_array($courseCode, $deptCourseCodes)) {
+                                                $deptCourseCodes[] = $courseCode;
+                                            }
+                                        }
+                                    }
+                                    sort($deptCourseCodes);
+                                    foreach ($deptCourseCodes as $courseCode):
+                                    ?>
+                                        <option value="<?php echo htmlspecialchars($courseCode); ?>"><?php echo htmlspecialchars($courseCode); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                
+                                <!-- Year Level Filter -->
+                                <select class="form-select form-select-sm mb-2 year-level-filter" data-dept="<?php echo $code; ?>">
+                                    <option value="">All Year Levels</option>
+                                    <?php
+                                    // Get unique year levels for this department
+                                    $deptYearLevels = [];
+                                    foreach ($dept['books'] as $bookItem) {
+                                        if (!empty($bookItem['year_level'])) {
+                                            $yearLevels = explode(',', $bookItem['year_level']);
+                                            foreach ($yearLevels as $yl) {
+                                                $yl = trim($yl);
+                                                if (!in_array($yl, $deptYearLevels)) {
+                                                    $deptYearLevels[] = $yl;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Sort year levels in proper order
+                                    $yearOrder = ['First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Graduate'];
+                                    $sortedYearLevels = array_intersect($yearOrder, $deptYearLevels);
+                                    foreach ($sortedYearLevels as $yearLevel):
+                                    ?>
+                                        <option value="<?php echo htmlspecialchars($yearLevel); ?>"><?php echo htmlspecialchars($yearLevel); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                
+                                <!-- Semester Filter -->
+                                <select class="form-select form-select-sm mb-2 semester-filter" data-dept="<?php echo $code; ?>">
+                                    <option value="">All Semesters</option>
+                                    <?php
+                                    // Get unique semesters for this department
+                                    $deptSemesters = [];
+                                    foreach ($dept['books'] as $bookItem) {
+                                        if (!empty($bookItem['semester'])) {
+                                            $semesters = explode(',', $bookItem['semester']);
+                                            foreach ($semesters as $sem) {
+                                                $sem = trim($sem);
+                                                if (!in_array($sem, $deptSemesters)) {
+                                                    $deptSemesters[] = $sem;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Sort semesters in proper order
+                                    $semesterOrder = ['First Semester', 'Second Semester', 'Summer', 'Midyear'];
+                                    $sortedSemesters = array_intersect($semesterOrder, $deptSemesters);
+                                    foreach ($sortedSemesters as $semester):
+                                    ?>
+                                        <option value="<?php echo htmlspecialchars($semester); ?>"><?php echo htmlspecialchars($semester); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="btn-group w-100 mt-2" role="group">
+                                <a href="?print=true&dept=<?php echo $code; ?>" 
+                                   class="btn btn-sm btn-outline-secondary print-btn" 
+                                   data-dept="<?php echo $code; ?>"
+                                   target="_blank">
+                                    <i class="fas fa-print"></i> Print
+                                </a>
+                                <a href="export-report.php?type=csv&dept=<?php echo $code; ?>&report=detailed" 
+                                   class="btn btn-sm btn-outline-secondary csv-btn"
+                                   data-dept="<?php echo $code; ?>">
+                                    <i class="fas fa-file-csv"></i> CSV
+                                </a>
+                                <a href="export-report.php?type=excel&dept=<?php echo $code; ?>&report=detailed" 
+                                   class="btn btn-sm btn-outline-secondary excel-btn"
+                                   data-dept="<?php echo $code; ?>">
+                                    <i class="fas fa-file-excel"></i> Excel
+                                </a>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -437,6 +636,11 @@ include '../includes/header.php';
                                 <td><?php echo $additionalStats['archived_books']; ?></td>
                                 <td><?php echo ($stats['total_books'] + $additionalStats['archived_books']) > 0 ? round(($additionalStats['archived_books'] / ($stats['total_books'] + $additionalStats['archived_books'])) * 100, 1) : 0; ?>%</td>
                             </tr>
+                            <tr>
+                                <td>Unique Courses/Subjects</td>
+                                <td><?php echo count($allCourses); ?></td>
+                                <td>-</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -468,7 +672,7 @@ include '../includes/header.php';
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Department Filter</label>
-                            <select class="form-control" name="department">
+                            <select class="form-control" name="department" id="departmentSelect">
                                 <option value="all">All Departments</option>
                                 <?php foreach ($departments as $code => $dept): ?>
                                     <option value="<?php echo $code; ?>"><?php echo $dept['name']; ?></option>
@@ -477,6 +681,16 @@ include '../includes/header.php';
                         </div>
                     </div>
                     <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Course/Subject Filter</label>
+                            <select class="form-control" name="course" id="courseSelect">
+                                <option value="all">All Courses</option>
+                                <?php foreach ($allCourses as $course): ?>
+                                    <option value="<?php echo htmlspecialchars($course); ?>"><?php echo htmlspecialchars($course); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="text-muted">Filter by Course Code and Subject Name</small>
+                        </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Date Range</label>
                             <select class="form-control" name="date_range">
@@ -488,12 +702,15 @@ include '../includes/header.php';
                                 <option value="custom">Custom Range</option>
                             </select>
                         </div>
+                    </div>
+                    <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Sort By</label>
                             <select class="form-control" name="sort_by">
                                 <option value="title">Title (A-Z)</option>
                                 <option value="author">Author (A-Z)</option>
                                 <option value="category">Category</option>
+                                <option value="subject_course">Course/Subject</option>
                                 <option value="created_at">Date Added</option>
                                 <option value="publication_year">Publication Year</option>
                             </select>
@@ -513,7 +730,7 @@ include '../includes/header.php';
                             <label class="form-check-label">Include Charts in Report</label>
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="include_context">
+                            <input class="form-check-input" type="checkbox" name="include_context" checked>
                             <label class="form-check-label">Include Subject/Course Context</label>
                         </div>
                     </div>
@@ -811,6 +1028,46 @@ function handleEmptyData() {
 }
 
 handleEmptyData();
+
+// Course filter functionality for department reports
+document.querySelectorAll('.program-filter, .course-code-filter, .year-level-filter, .semester-filter').forEach(select => {
+    select.addEventListener('change', function() {
+        const dept = this.dataset.dept;
+        const deptItem = this.closest('.department-report-item');
+        
+        // Get all filter values
+        const program = deptItem.querySelector('.program-filter').value;
+        const courseCode = deptItem.querySelector('.course-code-filter').value;
+        const yearLevel = deptItem.querySelector('.year-level-filter').value;
+        const semester = deptItem.querySelector('.semester-filter').value;
+        
+        // Get all export/print buttons
+        const printBtn = deptItem.querySelector('.print-btn');
+        const csvBtn = deptItem.querySelector('.csv-btn');
+        const excelBtn = deptItem.querySelector('.excel-btn');
+        
+        // Build URL parameters
+        let params = `dept=${dept}`;
+        
+        if (program) {
+            params += `&program=${encodeURIComponent(program)}`;
+        }
+        if (courseCode) {
+            params += `&course_code=${encodeURIComponent(courseCode)}`;
+        }
+        if (yearLevel) {
+            params += `&year_level=${encodeURIComponent(yearLevel)}`;
+        }
+        if (semester) {
+            params += `&semester=${encodeURIComponent(semester)}`;
+        }
+        
+        // Update button URLs
+        printBtn.href = `?print=true&${params}`;
+        csvBtn.href = `export-report.php?type=csv&${params}&report=detailed`;
+        excelBtn.href = `export-report.php?type=excel&${params}&report=detailed`;
+    });
+});
 </script>
 
 <?php include '../includes/footer.php'; ?>

@@ -596,6 +596,7 @@ class Book {
                 'author' => $data['author'],
                 'isbn' => $data['isbn'] ?? '',
                 'category' => $categoryStr,
+                'program' => $data['program'] ?? '',  // ADD PROGRAM FIELD
                 'quantity' => $data['quantity'] ?? 1,
                 'description' => $data['description'] ?? '',
                 'subject_name' => $data['subject_name'] ?? '',
@@ -631,12 +632,14 @@ class Book {
             }
             
             // Normal book addition (not old enough for archive)
-            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, quantity, description, subject_name, semester, section, year_level, course_code, publication_year, book_copy_number, total_quantity, is_multi_context, same_book_series) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            // ADD 'program' to the INSERT statement
+            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, program, quantity, description, subject_name, semester, section, year_level, course_code, publication_year, book_copy_number, total_quantity, is_multi_context, same_book_series) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $result = $stmt->execute([
                 $bookData['title'],
                 $bookData['author'],
                 $bookData['isbn'],
                 $bookData['category'],
+                $bookData['program'],  // ADD PROGRAM VALUE
                 $bookData['quantity'],
                 $bookData['description'],
                 $bookData['subject_name'],
@@ -654,10 +657,13 @@ class Book {
             if ($result) {
                 $bookId = $this->pdo->lastInsertId();
                 
-                // Log the activity
+                // Log the activity - include program info if available
                 $additionalInfo = "Quantity: {$bookData['quantity']}, Author: {$bookData['author']}";
                 if (!empty($bookData['publication_year'])) {
                     $additionalInfo .= ", Published: {$bookData['publication_year']}";
+                }
+                if (!empty($bookData['program'])) {
+                    $additionalInfo .= ", Program: {$bookData['program']}";
                 }
                 if ($isMultiContext) {
                     $additionalInfo .= " (Multi-context)";

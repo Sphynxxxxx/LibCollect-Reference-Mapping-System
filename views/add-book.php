@@ -60,12 +60,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $year_levels_str = !empty($year_levels) ? implode(',', $year_levels) : '';
         $semesters_str = !empty($semesters) ? implode(',', $semesters) : '';
         
+        // Get program value from form
+        $program = isset($_POST['selected_program']) ? $_POST['selected_program'] : '';
+        
         // Create single record per physical book with all applicable contexts
         $data = [
             'title' => $_POST['title'],
             'author' => $_POST['author'],
             'isbn' => $current_isbn,
             'category' => $categories_str,
+            'program' => $program,  // ADD THIS LINE
             'quantity' => 1,
             'description' => $_POST['description'],
             'subject_name' => $_POST['subject_name'] ?? '',
@@ -80,13 +84,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             'same_book_series' => $same_book ? 1 : 0
         ];
         
-        // If book is 5+ years old, add to PENDING archives (not directly to archived_books)
+        // If book is 5+ years old, add to PENDING archives
         if ($should_pending_archive) {
             try {
-                $sql = "INSERT INTO pending_archives (title, author, isbn, category, quantity, description, 
+                $sql = "INSERT INTO pending_archives (title, author, isbn, category, program, quantity, description, 
                         subject_name, semester, section, year_level, course_code, publication_year, 
                         book_copy_number, total_quantity, is_multi_context, same_book_series) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";  // ADD ? for program
                 
                 $stmt = $pdo->prepare($sql);
                 $result = $stmt->execute([
@@ -94,6 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $data['author'],
                     $data['isbn'],
                     $data['category'],
+                    $data['program'],  // ADD THIS LINE
                     $data['quantity'],
                     $data['description'],
                     $data['subject_name'],
@@ -400,8 +405,7 @@ include '../includes/header.php';
                                         <option value="">-- Select semester --</option>
                                         <option value="First Semester" <?php echo $submitted_semester_filter === 'First Semester' ? 'selected' : ''; ?>>First Semester</option>
                                         <option value="Second Semester" <?php echo $submitted_semester_filter === 'Second Semester' ? 'selected' : ''; ?>>Second Semester</option>
-                                        <option value="Summer" <?php echo $submitted_semester_filter === 'Summer' ? 'selected' : ''; ?>>Summer</option>
-                                        <option value="Midyear" <?php echo $submitted_semester_filter === 'Midyear' ? 'selected' : ''; ?>>Midyear</option>
+            
                                     </select>
                                 </div>
                             </div>

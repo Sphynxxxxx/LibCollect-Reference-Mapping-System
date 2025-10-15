@@ -213,6 +213,7 @@ function mergeArchivedBooks($books) {
         
         $context = [];
         if (!empty($bookItem['category'])) $context['category'] = $bookItem['category'];
+        if (!empty($bookItem['program'])) $context['program'] = $bookItem['program'];  // ADD THIS LINE
         if (!empty($bookItem['year_level'])) $context['year_level'] = $bookItem['year_level'];
         if (!empty($bookItem['semester'])) $context['semester'] = $bookItem['semester'];
         if (!empty($bookItem['section'])) $context['section'] = $bookItem['section'];
@@ -251,6 +252,7 @@ function mergePendingBooks($books) {
         
         $context = [];
         if (!empty($bookItem['category'])) $context['category'] = $bookItem['category'];
+        if (!empty($bookItem['program'])) $context['program'] = $bookItem['program'];  // ADD THIS LINE
         if (!empty($bookItem['year_level'])) $context['year_level'] = $bookItem['year_level'];
         if (!empty($bookItem['semester'])) $context['semester'] = $bookItem['semester'];
         if (!empty($bookItem['section'])) $context['section'] = $bookItem['section'];
@@ -416,6 +418,7 @@ function mergeEligibleBooks($books) {
         
         $context = [];
         if (!empty($bookItem['category'])) $context['category'] = $bookItem['category'];
+        if (!empty($bookItem['program'])) $context['program'] = $bookItem['program'];  // ADD THIS LINE
         if (!empty($bookItem['year_level'])) $context['year_level'] = $bookItem['year_level'];
         if (!empty($bookItem['semester'])) $context['semester'] = $bookItem['semester'];
         if (!empty($bookItem['section'])) $context['section'] = $bookItem['section'];
@@ -1078,12 +1081,23 @@ include '../includes/header.php';
                                         
                                         <!-- Pending Information -->
                                         <div class="pending-info">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <?php $categoryInfo = getCategoryDisplayInfo($book['category'], $departments); ?>
-                                                <span class="badge bg-<?php echo $categoryInfo['color']; ?> me-1">
-                                                    <?php echo htmlspecialchars($categoryInfo['display']); ?>
-                                                </span>
-                                                <span class="badge bg-secondary">Qty: <?php echo $book['quantity']; ?></span>
+                                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                                                <div>
+                                                    <?php $categoryInfo = getCategoryDisplayInfo($book['category'], $departments); ?>
+                                                    <span class="badge bg-<?php echo $categoryInfo['color']; ?> me-1 mb-1">
+                                                        <?php echo htmlspecialchars($categoryInfo['display']); ?>
+                                                    </span>
+                                                    
+                                                    <?php 
+                                                    // Display program if available
+                                                    if (!empty($book['program'])): 
+                                                    ?>
+                                                        <span class="badge bg-secondary me-1 mb-1">
+                                                            <i class="fas fa-certificate me-1"></i><?php echo htmlspecialchars($book['program']); ?>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <span class="badge bg-dark mb-1">Qty: <?php echo $book['quantity']; ?></span>
                                             </div>
                                             <small class="text-warning">
                                                 <i class="fas fa-clock me-1"></i>Pending since: <?php echo date('M j, Y', strtotime($book['pending_since'])); ?>

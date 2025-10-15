@@ -71,7 +71,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 $bookData['book_copy_number'] ?? 1,
                                 $bookData['total_quantity'] ?? 1,
                                 $bookData['is_multi_context'] ?? 0,
-                                $bookData['same_book_series'] ?? 0
+                                $bookData['same_book_series'] ?? 0,
+                                $bookData['program'] ?? '' 
+
                             ]);
                             
                             if ($result) {
@@ -108,8 +110,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 // Insert into pending_archives
                                 $sql = "INSERT INTO pending_archives (title, author, isbn, category, quantity, description, 
                                         subject_name, semester, section, year_level, course_code, publication_year, 
-                                        book_copy_number, total_quantity, is_multi_context, same_book_series) 
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                        book_copy_number, total_quantity, is_multi_context, same_book_series, program) 
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 
                                 $stmt = $pdo->prepare($sql);
                                 $result = $stmt->execute([
@@ -128,7 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                     $bookData['book_copy_number'] ?? 1,
                                     $bookData['total_quantity'] ?? 1,
                                     $bookData['is_multi_context'] ?? 0,
-                                    $bookData['same_book_series'] ?? 0
+                                    $bookData['same_book_series'] ?? 0,
+                                    $bookData['program'] ?? ''  
                                 ]);
                                 
                                 if ($result) {
@@ -212,6 +215,7 @@ function mergeBooks($books) {
         // Add academic context
         $context = [];
         if (!empty($book['category'])) $context['category'] = $book['category'];
+        if (!empty($book['program'])) $context['program'] = $book['program'];  
         if (!empty($book['year_level'])) $context['year_level'] = $book['year_level'];
         if (!empty($book['semester'])) $context['semester'] = $book['semester'];
         if (!empty($book['section'])) $context['section'] = $book['section'];
@@ -695,7 +699,7 @@ include '../includes/header.php';
                 <div class="col-md-6 mb-2">
                     <label class="form-label">Search within <?php echo $category_filter ? $departments[$category_filter]['name'] : 'all books'; ?></label>
                     <input type="text" class="form-control" name="search" 
-                           placeholder="Search by title, author, ISBN, or year..." 
+                           placeholder="Search by title, author, Call no., or year..." 
                            value="<?php echo htmlspecialchars($search); ?>">
                 </div>
                 
@@ -875,18 +879,37 @@ include '../includes/header.php';
                                             
                                             <?php foreach ($contextsByDept as $dept => $contexts): ?>
                                                 <div class="context-group">
-                                                    <div class="d-flex align-items-center mb-2">
+                                                    <div class="d-flex align-items-center mb-2 flex-wrap">
                                                         <?php if (isset($departments[$dept])): ?>
-                                                            <span class="badge bg-<?php echo $departments[$dept]['color']; ?> me-2">
+                                                            <span class="badge bg-<?php echo $departments[$dept]['color']; ?> me-2 mb-1">
                                                                 <i class="<?php echo $departments[$dept]['icon']; ?> me-1"></i>
                                                                 <?php echo $dept; ?>
                                                             </span>
                                                         <?php else: ?>
-                                                            <strong class="text-primary me-2">
+                                                            <strong class="text-primary me-2 mb-1">
                                                                 <?php echo $dept; ?>
                                                             </strong>
                                                         <?php endif; ?>
-                                                        <small class="text-muted">(<?php echo count($contexts); ?> context<?php echo count($contexts) > 1 ? 's' : ''; ?>)</small>
+                                                        
+                                                        <?php 
+                                                        // Display unique programs for this department
+                                                        $programs = array_unique(array_filter(array_map(function($context) {
+                                                            // Extract program from the book data if available
+                                                            return $context['program'] ?? '';
+                                                        }, $contexts)));
+                                                        
+                                                        foreach ($programs as $program): 
+                                                            if (!empty($program)):
+                                                        ?>
+                                                            <span class="badge bg-secondary me-2 mb-1">
+                                                                <i class="fas fa-certificate me-1"></i><?php echo htmlspecialchars($program); ?>
+                                                            </span>
+                                                        <?php 
+                                                            endif;
+                                                        endforeach; 
+                                                        ?>
+                                                        
+                                                        <small class="text-muted mb-1">(<?php echo count($contexts); ?> context<?php echo count($contexts) > 1 ? 's' : ''; ?>)</small>
                                                     </div>
                                                     
                                                     <?php 
