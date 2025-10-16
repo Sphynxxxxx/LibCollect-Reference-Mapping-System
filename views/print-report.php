@@ -26,25 +26,21 @@ $departments = [
     'BIT' => [
         'name' => 'Bachelor of Industrial Technology',
         'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY',
-        'description' => 'This course introduces the students to the basic occupational safety and health. The students will learn safe work practices and programs in preparation to specialty and general theories associated and physical encountered in the work.',
         'books' => []
     ],
     'EDUCATION' => [
         'name' => 'Education Department', 
         'full_name' => 'EDUCATION DEPARTMENT',
-        'description' => 'This course enables an introduction to theories and applications of primary educational devices involving electronic systems.',
         'books' => []
     ],
     'HBM' => [
         'name' => 'Hotel and Business Management',
         'full_name' => 'HOTEL AND BUSINESS MANAGEMENT',
-        'description' => 'This program provides comprehensive training in hospitality and business management principles.',
         'books' => []
     ],
     'COMPSTUD' => [
         'name' => 'Computer Studies',
         'full_name' => 'COMPUTER STUDIES',
-        'description' => 'This course covers fundamental computing concepts, programming languages, software development.',
         'books' => []
     ]
 ];
@@ -101,6 +97,18 @@ if (!empty($semester)) {
     });
 }
 
+// Function to get custom description from database
+function getCustomDescription($pdo, $courseCode, $subjectName) {
+    try {
+        $stmt = $pdo->prepare("SELECT description FROM subject_descriptions WHERE course_code = ? AND subject_name = ? LIMIT 1");
+        $stmt->execute([$courseCode, $subjectName]);
+        $result = $stmt->fetchColumn();
+        return $result ? $result : '';
+    } catch (Exception $e) {
+        return '';
+    }
+}
+
 // Group books by department, program, year level, semester AND by subject
 $departmentData = [];
 foreach ($filteredBooks as $bookItem) {
@@ -132,10 +140,14 @@ foreach ($filteredBooks as $bookItem) {
                     $subjectKey = $bookItem['course_code'] . '|' . $bookItem['subject_name'];
                     
                     if (!isset($departmentData[$groupKey]['subjects'][$subjectKey])) {
+                        // Get custom description from database
+                        $customDesc = getCustomDescription($pdo, $bookItem['course_code'], $bookItem['subject_name']);
+                        
                         $departmentData[$groupKey]['subjects'][$subjectKey] = [
                             'course_code' => $bookItem['course_code'],
                             'subject_name' => $bookItem['subject_name'],
                             'description' => $bookItem['description'] ?? '',
+                            'custom_description' => $customDesc,
                             'books' => []
                         ];
                     }
@@ -329,21 +341,21 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         }
 
         .section-program-title {
-            margin: 20px 0 5px 0;
+            margin: 0;
             font-size: 10pt;
             font-weight: bold;
             line-height: 1.3;
             text-align: center;
-            padding: 10px;
+            padding: 8px;
         }
 
         .section-year-semester {
-            margin: 0 0 15px 0;
+            margin: 0 0 10px 0;
             font-size: 9pt;
             font-weight: bold;
             line-height: 1.2;
             text-align: center;
-            padding: 6px;
+            padding: 5px;
             border-top: none;
         }
 
@@ -362,7 +374,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
 
         /* Course Section */
         .course-section {
-            margin: 20px 0;
+            margin: 10px 0;
             border: 1px solid black;
             page-break-inside: avoid;
         }
@@ -462,7 +474,6 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             right: 0;
             margin-top: 0;
             text-align: center;
-            border-top: 1px solid #ccc;
             padding: 15px 0;
             background: white;
         }
@@ -525,6 +536,14 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             
             body {
                 padding-bottom: 100px; 
+            }
+            
+            .footer-logos img {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                color-adjust: exact;
+                max-width: 800px;
+                max-height: 800px;
             }
         }
     </style>
@@ -680,7 +699,6 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             $programKey = $groupData['department'] . '|' . $groupData['program'];
             if ($currentProgram !== $programKey && !empty($groupData['program']) && isset($programNames[$groupData['program']])) {
                 $currentProgram = $programKey;
-                // Removed the page-break div here
                 echo '<div class="section-program-title">';
                 echo $programNames[$groupData['program']];
                 echo '</div>';
@@ -717,8 +735,14 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                 
                 <div class="course-description">
                     <?php 
-                    // Display subject description or default department description
-                    echo !empty($subjectData['description']) ? $subjectData['description'] : $departments[$groupData['department']]['description'];
+                    // Priority: Custom description from DB > Book description > Department default description
+                    if (!empty($subjectData['custom_description'])) {
+                        echo $subjectData['custom_description'];
+                    } elseif (!empty($subjectData['description'])) {
+                        echo $subjectData['description'];
+                    } else {
+                        echo $departments[$groupData['department']]['description'];
+                    }
                     ?>
                 </div>
 

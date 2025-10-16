@@ -503,19 +503,19 @@ include '../includes/header.php';
                             
                             <div class="btn-group w-100 mt-2" role="group">
                                 <a href="?print=true&dept=<?php echo $code; ?>" 
-                                class="btn btn-sm btn-outline-secondary print-btn" 
-                                data-dept="<?php echo $code; ?>"
-                                target="_blank">
+                                   class="btn btn-sm btn-outline-secondary print-btn" 
+                                   data-dept="<?php echo $code; ?>"
+                                   target="_blank">
                                     <i class="fas fa-print"></i> Print
                                 </a>
                                 <a href="export-report.php?type=csv&dept=<?php echo $code; ?>&report=detailed" 
-                                class="btn btn-sm btn-outline-secondary csv-btn"
-                                data-dept="<?php echo $code; ?>">
+                                   class="btn btn-sm btn-outline-secondary csv-btn"
+                                   data-dept="<?php echo $code; ?>">
                                     <i class="fas fa-file-csv"></i> CSV
                                 </a>
                                 <a href="export-report.php?type=excel&dept=<?php echo $code; ?>&report=detailed" 
-                                class="btn btn-sm btn-outline-secondary excel-btn"
-                                data-dept="<?php echo $code; ?>">
+                                   class="btn btn-sm btn-outline-secondary excel-btn"
+                                   data-dept="<?php echo $code; ?>">
                                     <i class="fas fa-file-excel"></i> Excel
                                 </a>
                             </div>
@@ -535,12 +535,12 @@ include '../includes/header.php';
                 <p class="text-muted">Generate comprehensive library reports</p>
                 <div class="d-grid gap-2">
                     <a href="?print=true&dept=all" 
-                       class="btn btn-outline-success" 
+                       class="btn btn-outline-success print-all-btn" 
                        target="_blank">
                         <i class="fas fa-file-pdf me-2"></i>Complete Library Report
                     </a>
                     <a href="?print=true&dept=summary" 
-                       class="btn btn-outline-info" 
+                       class="btn btn-outline-info print-summary-btn" 
                        target="_blank">
                         <i class="fas fa-chart-pie me-2"></i>Summary Statistics Report
                     </a>
@@ -737,6 +737,60 @@ include '../includes/header.php';
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="generateCustomPrint()">
                     <i class="fas fa-print me-1"></i>Generate Report
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Subject Description Modal -->
+<div class="modal fade" id="subjectDescriptionModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <div class="w-100">
+                    <h5 class="modal-title mb-2" id="modalSubjectTitle">Subject Description</h5>
+                    <small id="modalProgress" class="text-white-50">Subject 1 of X</small>
+                    <div class="progress mt-2" style="height: 5px;">
+                        <div class="progress-bar bg-white" id="descriptionProgressBar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="currentSubjectCourseCode">
+                <input type="hidden" id="currentSubjectName">
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Review and edit the subject description</strong><br>
+                    This description will appear in the printed report. You can modify it now or skip to use the default description.
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Subject Description</label>
+                    <textarea class="form-control" id="subjectDescription" rows="8" 
+                              placeholder="Enter the description for this subject that will appear in the printed report..."></textarea>
+                    <small class="text-muted">
+                        Leave blank to use the default department description. Changes will be saved for future reports.
+                    </small>
+                </div>
+                
+                <div class="alert alert-warning mb-0">
+                    <small>
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        <strong>Tip:</strong> If you save a description, it will be automatically used for this subject in future reports.
+                    </small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger" onclick="skipAllDescriptions()">
+                    <i class="fas fa-forward me-1"></i>Skip All & Print
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="skipCurrentDescription()">
+                    <i class="fas fa-arrow-right me-1"></i>Skip This One
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveCurrentDescription()">
+                    <i class="fas fa-save me-1"></i>Save & Continue
                 </button>
             </div>
         </div>
@@ -1065,6 +1119,187 @@ document.querySelectorAll('.program-filter, .course-code-filter, .year-level-fil
         excelBtn.href = `export-report.php?type=excel&${params}&report=detailed`;
     });
 });
+
+// Subject descriptions management before printing
+let subjectsForPrint = [];
+let currentDescriptionIndex = 0;
+let printParams = {};
+
+// Override print button clicks to show description modal first
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle department print buttons
+    document.querySelectorAll('.print-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const href = this.getAttribute('href');
+            const url = new URL(window.location.origin + window.location.pathname + href.substring(href.indexOf('?')));
+            printParams = Object.fromEntries(url.searchParams);
+            
+            // Fetch subjects for this department/filter combination
+            fetchSubjectsForPrint(printParams);
+        });
+    });
+    
+    // Handle "Complete Library Report" button
+    const printAllBtn = document.querySelector('.print-all-btn');
+    if (printAllBtn) {
+        printAllBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            printParams = { print: 'true', dept: 'all' };
+            fetchSubjectsForPrint(printParams);
+        });
+    }
+    
+    // Handle "Summary Statistics Report" button
+    const printSummaryBtn = document.querySelector('.print-summary-btn');
+    if (printSummaryBtn) {
+        printSummaryBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            // Summary doesn't need descriptions, print directly
+            window.open(this.href, '_blank');
+        });
+    }
+});
+
+function fetchSubjectsForPrint(params) {
+    // Show loading
+    const loadingToast = document.createElement('div');
+    loadingToast.className = 'toast show position-fixed bottom-0 end-0 m-3 bg-primary text-white';
+    loadingToast.style.zIndex = '9999';
+    loadingToast.innerHTML = '<div class="toast-body"><i class="fas fa-spinner fa-spin me-2"></i>Loading subjects...</div>';
+    document.body.appendChild(loadingToast);
+    
+    // Fetch subjects via AJAX
+    const queryString = new URLSearchParams(params).toString();
+    fetch(`../api/get-subjects-for-print.php?${queryString}`)
+        .then(response => response.json())
+        .then(data => {
+            document.body.removeChild(loadingToast);
+            subjectsForPrint = data.subjects;
+            
+            if (subjectsForPrint.length === 0) {
+                alert('No subjects found for the selected filters.');
+                return;
+            }
+            
+            currentDescriptionIndex = 0;
+            showDescriptionModal();
+        })
+        .catch(error => {
+            document.body.removeChild(loadingToast);
+            console.error('Error:', error);
+            if (confirm('Error loading subjects. Do you want to print without description review?')) {
+                proceedToPrint();
+            }
+        });
+}
+
+function showDescriptionModal() {
+    if (currentDescriptionIndex >= subjectsForPrint.length) {
+        // All descriptions reviewed, proceed to print
+        saveDescriptionsAndPrint();
+        return;
+    }
+    
+    const subject = subjectsForPrint[currentDescriptionIndex];
+    const modal = new bootstrap.Modal(document.getElementById('subjectDescriptionModal'));
+    
+    // Populate modal
+    document.getElementById('modalSubjectTitle').textContent = 
+        `${subject.course_code} - ${subject.subject_name}`;
+    document.getElementById('modalProgress').textContent = 
+        `Subject ${currentDescriptionIndex + 1} of ${subjectsForPrint.length}`;
+    document.getElementById('subjectDescription').value = subject.description || '';
+    document.getElementById('currentSubjectCourseCode').value = subject.course_code;
+    document.getElementById('currentSubjectName').value = subject.subject_name;
+    
+    // Update progress bar
+    const progress = ((currentDescriptionIndex + 1) / subjectsForPrint.length) * 100;
+    document.getElementById('descriptionProgressBar').style.width = progress + '%';
+    
+    modal.show();
+}
+
+function saveCurrentDescription() {
+    const description = document.getElementById('subjectDescription').value.trim();
+    const courseCode = document.getElementById('currentSubjectCourseCode').value;
+    const subjectName = document.getElementById('currentSubjectName').value;
+    
+    // Update in our array
+    subjectsForPrint[currentDescriptionIndex].description = description;
+    
+    // Move to next subject
+    currentDescriptionIndex++;
+    
+    // Close current modal
+    bootstrap.Modal.getInstance(document.getElementById('subjectDescriptionModal')).hide();
+    
+    // Show next or finish
+    setTimeout(() => showDescriptionModal(), 300);
+}
+
+function skipCurrentDescription() {
+    currentDescriptionIndex++;
+    bootstrap.Modal.getInstance(document.getElementById('subjectDescriptionModal')).hide();
+    setTimeout(() => showDescriptionModal(), 300);
+}
+
+function skipAllDescriptions() {
+    bootstrap.Modal.getInstance(document.getElementById('subjectDescriptionModal')).hide();
+    proceedToPrint();
+}
+
+function saveDescriptionsAndPrint() {
+    // Save all descriptions to database via AJAX
+    const descriptionsToSave = subjectsForPrint.filter(s => s.description && s.description.trim() !== '');
+    
+    if (descriptionsToSave.length > 0) {
+        // Show saving toast
+        const savingToast = document.createElement('div');
+        savingToast.className = 'toast show position-fixed bottom-0 end-0 m-3 bg-success text-white';
+        savingToast.style.zIndex = '9999';
+        savingToast.innerHTML = '<div class="toast-body"><i class="fas fa-spinner fa-spin me-2"></i>Saving descriptions...</div>';
+        document.body.appendChild(savingToast);
+        
+        fetch('../api/save-descriptions.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ descriptions: descriptionsToSave })
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.body.removeChild(savingToast);
+            console.log('Descriptions saved:', data);
+            
+            // Show success toast
+            const successToast = document.createElement('div');
+            successToast.className = 'toast show position-fixed bottom-0 end-0 m-3 bg-success text-white';
+            successToast.style.zIndex = '9999';
+            successToast.innerHTML = '<div class="toast-body"><i class="fas fa-check me-2"></i>Descriptions saved successfully!</div>';
+            document.body.appendChild(successToast);
+            setTimeout(() => document.body.removeChild(successToast), 2000);
+            
+            proceedToPrint();
+        })
+        .catch(error => {
+            if (document.body.contains(savingToast)) {
+                document.body.removeChild(savingToast);
+            }
+            console.error('Error saving descriptions:', error);
+            // Proceed anyway
+            proceedToPrint();
+        });
+    } else {
+        proceedToPrint();
+    }
+}
+
+function proceedToPrint() {
+    const queryString = new URLSearchParams(printParams).toString();
+    window.open(`?${queryString}`, '_blank');
+}
 </script>
 
 <?php include '../includes/footer.php'; ?>

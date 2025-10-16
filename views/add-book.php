@@ -458,11 +458,11 @@ include '../includes/header.php';
                     </div>
 
                     <!-- Description -->
-                    <div class="mb-3">
+                    <!--<div class="mb-3">
                         <label class="form-label">Description</label>
                         <textarea class="form-control" name="description" rows="4" 
                                 placeholder="Brief description of the book content, learning objectives, or course relevance..."><?php echo isset($_POST['description']) ? htmlspecialchars($_POST['description']) : ''; ?></textarea>
-                    </div>
+                    </div>-->
 
                     <!-- Preview Section -->
                     <div class="mb-4" id="previewSection" style="display: none;">
