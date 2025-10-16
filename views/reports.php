@@ -397,13 +397,16 @@ include '../includes/header.php';
                 <div class="d-grid gap-2">
                     <?php foreach ($departments as $code => $dept): ?>
                         <div class="department-report-item mb-3">
-                            <a href="?print=true&dept=<?php echo $code; ?>" 
-                               class="btn btn-outline-primary text-start" 
-                               target="_blank">
-                                <i class="fas fa-file-alt me-2"></i>
-                                <?php echo $dept['name']; ?> Report
-                                <span class="badge bg-primary float-end"><?php echo count($dept['books']); ?> books</span>
-                            </a>
+                            <!-- Changed from button to styled div -->
+                            <div class="p-3 border rounded bg-light">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>
+                                        <i class="fas fa-file-alt me-2"></i>
+                                        <?php echo $dept['name']; ?> Report
+                                    </span>
+                                    <span class="badge bg-primary"><?php echo count($dept['books']); ?> books</span>
+                                </div>
+                            </div>
                             
                             <!-- Filter Options -->
                             <div class="mt-2 p-2 bg-light rounded">
@@ -413,7 +416,6 @@ include '../includes/header.php';
                                 <select class="form-select form-select-sm mb-2 program-filter" data-dept="<?php echo $code; ?>">
                                     <option value="">All Programs</option>
                                     <?php
-                                    // Get unique programs for this department
                                     $deptPrograms = [];
                                     foreach ($dept['books'] as $bookItem) {
                                         if (!empty($bookItem['program'])) {
@@ -434,7 +436,6 @@ include '../includes/header.php';
                                 <select class="form-select form-select-sm mb-2 course-code-filter" data-dept="<?php echo $code; ?>">
                                     <option value="">All Course Codes</option>
                                     <?php
-                                    // Get unique course codes for this department
                                     $deptCourseCodes = [];
                                     foreach ($dept['books'] as $bookItem) {
                                         if (!empty($bookItem['course_code'])) {
@@ -455,7 +456,6 @@ include '../includes/header.php';
                                 <select class="form-select form-select-sm mb-2 year-level-filter" data-dept="<?php echo $code; ?>">
                                     <option value="">All Year Levels</option>
                                     <?php
-                                    // Get unique year levels for this department
                                     $deptYearLevels = [];
                                     foreach ($dept['books'] as $bookItem) {
                                         if (!empty($bookItem['year_level'])) {
@@ -468,7 +468,6 @@ include '../includes/header.php';
                                             }
                                         }
                                     }
-                                    // Sort year levels in proper order
                                     $yearOrder = ['First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Graduate'];
                                     $sortedYearLevels = array_intersect($yearOrder, $deptYearLevels);
                                     foreach ($sortedYearLevels as $yearLevel):
@@ -481,7 +480,6 @@ include '../includes/header.php';
                                 <select class="form-select form-select-sm mb-2 semester-filter" data-dept="<?php echo $code; ?>">
                                     <option value="">All Semesters</option>
                                     <?php
-                                    // Get unique semesters for this department
                                     $deptSemesters = [];
                                     foreach ($dept['books'] as $bookItem) {
                                         if (!empty($bookItem['semester'])) {
@@ -494,7 +492,6 @@ include '../includes/header.php';
                                             }
                                         }
                                     }
-                                    // Sort semesters in proper order
                                     $semesterOrder = ['First Semester', 'Second Semester', 'Summer', 'Midyear'];
                                     $sortedSemesters = array_intersect($semesterOrder, $deptSemesters);
                                     foreach ($sortedSemesters as $semester):
@@ -506,19 +503,19 @@ include '../includes/header.php';
                             
                             <div class="btn-group w-100 mt-2" role="group">
                                 <a href="?print=true&dept=<?php echo $code; ?>" 
-                                   class="btn btn-sm btn-outline-secondary print-btn" 
-                                   data-dept="<?php echo $code; ?>"
-                                   target="_blank">
+                                class="btn btn-sm btn-outline-secondary print-btn" 
+                                data-dept="<?php echo $code; ?>"
+                                target="_blank">
                                     <i class="fas fa-print"></i> Print
                                 </a>
                                 <a href="export-report.php?type=csv&dept=<?php echo $code; ?>&report=detailed" 
-                                   class="btn btn-sm btn-outline-secondary csv-btn"
-                                   data-dept="<?php echo $code; ?>">
+                                class="btn btn-sm btn-outline-secondary csv-btn"
+                                data-dept="<?php echo $code; ?>">
                                     <i class="fas fa-file-csv"></i> CSV
                                 </a>
                                 <a href="export-report.php?type=excel&dept=<?php echo $code; ?>&report=detailed" 
-                                   class="btn btn-sm btn-outline-secondary excel-btn"
-                                   data-dept="<?php echo $code; ?>">
+                                class="btn btn-sm btn-outline-secondary excel-btn"
+                                data-dept="<?php echo $code; ?>">
                                     <i class="fas fa-file-excel"></i> Excel
                                 </a>
                             </div>

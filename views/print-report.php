@@ -101,30 +101,48 @@ if (!empty($semester)) {
     });
 }
 
-// Group books by department AND by subject
-$departmentSubjects = [];
+// Group books by department, program, year level, semester AND by subject
+$departmentData = [];
 foreach ($filteredBooks as $bookItem) {
     $categories = explode(',', $bookItem['category']);
     foreach ($categories as $category) {
         $category = trim($category);
         if (isset($departments[$category])) {
-            // Create subject key
-            $subjectKey = $bookItem['course_code'] . '|' . $bookItem['subject_name'];
+            $bookProgram = trim($bookItem['program'] ?? '');
+            $bookYearLevels = !empty($bookItem['year_level']) ? array_map('trim', explode(',', $bookItem['year_level'])) : [''];
+            $bookSemesters = !empty($bookItem['semester']) ? array_map('trim', explode(',', $bookItem['semester'])) : [''];
             
-            if (!isset($departmentSubjects[$category])) {
-                $departmentSubjects[$category] = [];
+            // Create entries for each year level and semester combination
+            foreach ($bookYearLevels as $yl) {
+                foreach ($bookSemesters as $sem) {
+                    // Create grouping key
+                    $groupKey = $category . '|' . $bookProgram . '|' . $yl . '|' . $sem;
+                    
+                    if (!isset($departmentData[$groupKey])) {
+                        $departmentData[$groupKey] = [
+                            'department' => $category,
+                            'program' => $bookProgram,
+                            'year_level' => $yl,
+                            'semester' => $sem,
+                            'subjects' => []
+                        ];
+                    }
+                    
+                    // Create subject key
+                    $subjectKey = $bookItem['course_code'] . '|' . $bookItem['subject_name'];
+                    
+                    if (!isset($departmentData[$groupKey]['subjects'][$subjectKey])) {
+                        $departmentData[$groupKey]['subjects'][$subjectKey] = [
+                            'course_code' => $bookItem['course_code'],
+                            'subject_name' => $bookItem['subject_name'],
+                            'description' => $bookItem['description'] ?? '',
+                            'books' => []
+                        ];
+                    }
+                    
+                    $departmentData[$groupKey]['subjects'][$subjectKey]['books'][] = $bookItem;
+                }
             }
-            
-            if (!isset($departmentSubjects[$category][$subjectKey])) {
-                $departmentSubjects[$category][$subjectKey] = [
-                    'course_code' => $bookItem['course_code'],
-                    'subject_name' => $bookItem['subject_name'],
-                    'description' => $bookItem['description'] ?? '',
-                    'books' => []
-                ];
-            }
-            
-            $departmentSubjects[$category][$subjectKey]['books'][] = $bookItem;
         }
     }
 }
@@ -155,7 +173,7 @@ if (!empty($filteredBooks) && $department !== 'summary') {
 }
 
 if ($department === 'all') {
-    $reportData = $departmentSubjects;
+    $reportData = $departmentData;
     $showProgramTitle = false; // Don't show for "All Departments"
     $dynamicProgramTitle = '';
 } elseif ($department === 'summary') {
@@ -164,35 +182,13 @@ if ($department === 'all') {
     $showProgramTitle = false;
     $dynamicProgramTitle = '';
 } elseif (isset($departments[$department])) {
-    if (isset($departmentSubjects[$department])) {
-        $reportData = [$department => $departmentSubjects[$department]];
-    } else {
-        $reportData = [$department => []];
-    }
+    // Filter departmentData for specific department
+    $reportData = array_filter($departmentData, function($data) use ($department) {
+        return $data['department'] === $department;
+    });
     
     // Only show title if program filter was specifically set
     if (empty($program)) {
-        $dynamicProgramTitle = $departments[$department]['full_name'];
-        $showProgramTitle = true;
-    }
-}
-
-if ($department === 'all') {
-    $reportData = $departmentSubjects;
-    $showProgramTitle = false; // Don't show for "All Departments"
-} elseif ($department === 'summary') {
-    $reportTitle = 'LIBRARY STATISTICS SUMMARY';
-    $reportData = ['summary' => true];
-    $showProgramTitle = false;
-} elseif (isset($departments[$department])) {
-    if (isset($departmentSubjects[$department])) {
-        $reportData = [$department => $departmentSubjects[$department]];
-    } else {
-        $reportData = [$department => []];
-    }
-    
-    // Only set title if no specific program title was set AND program filter is empty
-    if (empty($dynamicProgramTitle) && empty($program)) {
         $dynamicProgramTitle = $departments[$department]['full_name'];
         $showProgramTitle = true;
     }
@@ -332,6 +328,25 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             line-height: 1.3;
         }
 
+        .section-program-title {
+            margin: 20px 0 5px 0;
+            font-size: 10pt;
+            font-weight: bold;
+            line-height: 1.3;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .section-year-semester {
+            margin: 0 0 15px 0;
+            font-size: 9pt;
+            font-weight: bold;
+            line-height: 1.2;
+            text-align: center;
+            padding: 6px;
+            border-top: none;
+        }
+
         .academic-year {
             font-size: 10pt;
             font-weight: bold;
@@ -441,10 +456,15 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
 
         /* Footer logos */
         .footer-logos {
-            margin-top: 30px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            margin-top: 0;
             text-align: center;
             border-top: 1px solid #ccc;
-            padding-top: 15px;
+            padding: 15px 0;
+            background: white;
         }
 
         .footer-logos img {
@@ -485,13 +505,6 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             background: #545b62;
         }
 
-        /* Footer logos */
-        .footer-logos {
-            margin-top: 30px;
-            text-align: center;
-            border-top: 1px solid #ccc;
-            padding-top: 15px;
-        }
 
         .footer-logos img {
             max-width: 800px; 
@@ -503,12 +516,15 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         }
 
         @media print {
-            .footer-logos img {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-                color-adjust: exact;
-                max-width: 800px;
-                max-height: 800px;
+            .footer-logos {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+            }
+            
+            body {
+                padding-bottom: 100px; 
             }
         }
     </style>
@@ -546,7 +562,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             <strong><?php echo $reportTitle; ?></strong>
         </div>
 
-        <?php if ($showProgramTitle && !empty($dynamicProgramTitle) && $department !== 'summary'): ?>
+        <?php if ($showProgramTitle && !empty($dynamicProgramTitle) && $department !== 'summary' && $department !== 'all'): ?>
         <div class="dynamic-program-title">
             <?php echo $dynamicProgramTitle; ?>
         </div>
@@ -556,7 +572,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             <strong>ACADEMIC YEAR <?php echo $academicYear; ?></strong>
         </div>
 
-        <?php if ($department !== 'summary' && (!empty($yearLevel) || !empty($semester))): ?>
+        <?php if ($department !== 'summary' && $department !== 'all' && (!empty($yearLevel) || !empty($semester))): ?>
         <div class="semester-info">
             <?php 
             $semesterText = '';
@@ -639,16 +655,59 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         </div>
 
     <?php else: ?>
-        <!-- Detailed Department Reports by Subject -->
+        <!-- Detailed Department Reports by Program, Year Level, Semester, and Subject -->
         <?php 
         $sectionCounter = 0;
-        foreach ($reportData as $deptCode => $subjects): 
-            if (empty($subjects)) continue;
+        $currentDepartment = '';
+        $currentProgram = '';
+        
+        foreach ($reportData as $groupKey => $groupData): 
+            if (empty($groupData['subjects'])) continue;
             
-            foreach ($subjects as $subjectKey => $subjectData):
+            // Show department title when department changes (for "all" departments view)
+            if ($department === 'all' && $currentDepartment !== $groupData['department']) {
+                $currentDepartment = $groupData['department'];
+                $currentProgram = ''; // Reset program when department changes
+                if ($sectionCounter > 0) {
+                    echo '<div class="page-break"></div>';
+                }
+                echo '<div class="dynamic-program-title" style="margin: 20px 0;">';
+                echo $departments[$currentDepartment]['full_name'];
+                echo '</div>';
+            }
+            
+            // Show program title when program changes
+            $programKey = $groupData['department'] . '|' . $groupData['program'];
+            if ($currentProgram !== $programKey && !empty($groupData['program']) && isset($programNames[$groupData['program']])) {
+                $currentProgram = $programKey;
+                // Removed the page-break div here
+                echo '<div class="section-program-title">';
+                echo $programNames[$groupData['program']];
+                echo '</div>';
+            }
+            
+            // Show year level and semester under the program
+            $yearSemesterText = '';
+            if (!empty($groupData['year_level'])) {
+                $yearSemesterText .= $groupData['year_level'];
+            }
+            if (!empty($groupData['semester'])) {
+                if (!empty($yearSemesterText)) {
+                    $yearSemesterText .= ' - ';
+                }
+                $yearSemesterText .= $groupData['semester'];
+            }
+            
+            if (!empty($yearSemesterText)): ?>
+                <div class="section-year-semester">
+                    <?php echo $yearSemesterText; ?>
+                </div>
+            <?php endif;
+            
+            foreach ($groupData['subjects'] as $subjectKey => $subjectData):
                 $sectionCounter++;
         ?>
-            <div class="course-section <?php echo ($sectionCounter > 1) ? 'page-break' : ''; ?>">
+            <div class="course-section">
                 <div class="course-header">
                     <?php 
                     // Display course code and subject name
@@ -659,7 +718,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                 <div class="course-description">
                     <?php 
                     // Display subject description or default department description
-                    echo !empty($subjectData['description']) ? $subjectData['description'] : $departments[$deptCode]['description'];
+                    echo !empty($subjectData['description']) ? $subjectData['description'] : $departments[$groupData['department']]['description'];
                     ?>
                 </div>
 
