@@ -77,20 +77,20 @@ if (isset($_SESSION['user_id'])) {
 }
 
 if ($_POST) {
-    $email = trim($_POST['email'] ?? '');
+    $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     
     if ($debug_mode) {
-        $debug_info .= "Email entered: '" . htmlspecialchars($email) . "'<br>";
+        $debug_info .= "Username entered: '" . htmlspecialchars($username) . "'<br>";
         $debug_info .= "Password length: " . strlen($password) . "<br>";
     }
     
-    if (!empty($email) && !empty($password)) {
+    if (!empty($username) && !empty($password)) {
         try {
-            // Check if the user exists by email
-            $sql = "SELECT * FROM users WHERE email = ?";
+            // Check if the user exists by username
+            $sql = "SELECT * FROM users WHERE username = ?";
             $stmt = $pdo->prepare($sql);
-            $stmt->execute([$email]);
+            $stmt->execute([$username]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             
             if ($debug_mode) {
@@ -108,7 +108,7 @@ if ($_POST) {
                 // Successful login - set all required session variables
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
-                $_SESSION['email'] = $user['email'];
+                $_SESSION['email'] = $user['email'] ?? '';
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['full_name'] = $user['full_name'] ?? $user['username'];
                 $_SESSION['last_activity'] = time(); // Set initial activity time
@@ -123,7 +123,7 @@ if ($_POST) {
                 try {
                     $logger->logUserActivity(
                         'login',
-                        "User {$user['username']} ({$user['email']}) logged in successfully",
+                        "User {$user['username']} logged in successfully",
                         $user['id'],
                         $user['username']
                     );
@@ -144,9 +144,9 @@ if ($_POST) {
                 try {
                     $logger->logUserActivity(
                         'failed_login',
-                        "Failed login attempt for email: {$email}",
+                        "Failed login attempt for username: {$username}",
                         null,
-                        $email
+                        $username
                     );
                 } catch (Exception $e) {
                     if ($debug_mode) {
@@ -154,7 +154,7 @@ if ($_POST) {
                     }
                 }
                 
-                $error = "Invalid email or password";
+                $error = "Invalid username or password";
             }
         } catch (PDOException $e) {
             error_log("Login error: " . $e->getMessage());
@@ -175,11 +175,11 @@ if ($debug_mode) {
         $count = $stmt->fetch()['count'];
         $debug_info .= "Total users in database: $count<br>";
         
-        $stmt = $pdo->query("SELECT username, email, role FROM users LIMIT 5");
+        $stmt = $pdo->query("SELECT username, role FROM users LIMIT 5");
         $users = $stmt->fetchAll();
         $debug_info .= "Sample users: ";
         foreach ($users as $u) {
-            $debug_info .= $u['username'] . " (" . $u['email'] . " - " . $u['role'] . "), ";
+            $debug_info .= $u['username'] . " (" . $u['role'] . "), ";
         }
         $debug_info = rtrim($debug_info, ', ') . "<br>";
         
@@ -223,7 +223,7 @@ if ($debug_mode) {
         
         .logo-section i {
             font-size: 3rem;
-            color: #667eea;
+            color: #001f75;
             margin-bottom: 10px;
         }
         
@@ -306,13 +306,13 @@ if ($debug_mode) {
         }
         
         .signup-link a {
-            color: #667eea;
+            color: #001f75;
             text-decoration: none;
             font-weight: 600;
         }
         
         .signup-link a:hover {
-            color: #764ba2;
+            color: #1e40af;
         }
         
         .debug-info {
@@ -325,7 +325,7 @@ if ($debug_mode) {
             color: #495057;
         }
         
-        .email-hint {
+        .username-hint {
             font-size: 0.8rem;
             color: #666;
             margin-top: 5px;
@@ -338,8 +338,9 @@ if ($debug_mode) {
             <div class="col-md-6">
                 <div class="login-container">
                     <div class="logo-section">
-
-                        <h2>ISAT U LibCollect: Reference Mapping System</h2>
+                        <i class="fas fa-book-reader"></i>
+                        <h2>ISAT U LibCollect</h2>
+                        <p>Reference Mapping System</p>
                     </div>
                     
                     <?php if ($debug_mode && $debug_info): ?>
@@ -365,19 +366,16 @@ if ($debug_mode) {
                     
                     <form method="POST">
                         <div class="mb-3">
-                            <label for="email" class="form-label">
-                                <i class="fas fa-envelope me-1"></i>ISAT U Staff Email
+                            <label for="username" class="form-label">
+                                <i class="fas fa-user me-1"></i>Username
                             </label>
-                            <input type="email" 
+                            <input type="text" 
                                    class="form-control" 
-                                   id="email" 
-                                   name="email" 
-                                   value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>"
+                                   id="username" 
+                                   name="username" 
+                                   placeholder="Enter your username"
+                                   value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>"
                                    required>
-                            <div class="email-hint">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Use your ISAT U staff email address
-                            </div>
                         </div>
                         
                         <div class="mb-4">
@@ -393,16 +391,16 @@ if ($debug_mode) {
                         </div>
                         
                         <button type="submit" class="btn btn-primary">
-                            <i></i>Login
+                            <i class="fas fa-sign-in-alt me-2"></i>Login
                         </button>
                     </form>
                     
                     <?php if ($debug_mode): ?>
                         <div class="debug-info mt-3">
                             <strong>Test Credentials:</strong><br>
-                            Email: admin@staff.isatu.edu.ph<br>
+                            Username: (use the username you set during signup)<br>
                             Password: (use the password you set during signup)<br>
-                            <small>Or use the credentials you created during signup</small>
+                            <small>Use the credentials you created during signup</small>
                         </div>
                     <?php endif; ?>
                     
@@ -413,13 +411,6 @@ if ($debug_mode) {
                                 <i class="fas fa-user-plus me-1"></i>Sign up here
                             </a>
                         </p>
-                        <?php if (!$debug_mode): ?>
-                        <p class="mb-0 mt-2">
-                            <!--<small>
-                                <a href="?debug=1" style="color: #999;">Having trouble? Enable debug mode</a>
-                            </small>-->
-                        </p>
-                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -442,8 +433,8 @@ if ($debug_mode) {
         }, 5000);
         <?php endif; ?>
         
-        // Auto-focus on email field
-        document.getElementById('email').focus();
+        // Auto-focus on username field
+        document.getElementById('username').focus();
     </script>
 </body>
 </html>

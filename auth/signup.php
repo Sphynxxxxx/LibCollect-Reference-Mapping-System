@@ -61,11 +61,11 @@ if (isset($_SESSION['user_id'])) {
 
 if ($_POST) {
     $username = trim($_POST['username'] ?? '');
-    $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
     $fullName = trim($_POST['full_name'] ?? '');
-    $role = $_POST['role'] ?? 'staff';
+    $role = 'staff'; // Default role set to staff
+    $email = ''; // No email required
     
     // Validation
     if (empty($username)) {
@@ -74,14 +74,6 @@ if ($_POST) {
         $errors[] = "Username must be at least 3 characters long";
     } elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
         $errors[] = "Username can only contain letters, numbers, and underscores";
-    }
-    
-    if (empty($email)) {
-        $errors[] = "Email is required";
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "Invalid email format";
-    } elseif (!str_ends_with($email, '@staff.isatu.edu.ph')) {
-        $errors[] = "Email must be a valid ISAT U staff email (@staff.isatu.edu.ph)";
     }
     
     if (empty($password)) {
@@ -98,13 +90,13 @@ if ($_POST) {
         $errors[] = "Full name is required";
     }
     
-    // Check if username or email already exists
+    // Check if username already exists
     if (empty($errors)) {
         try {
-            $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
-            $stmt->execute([$username, $email]);
+            $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ?");
+            $stmt->execute([$username]);
             if ($stmt->fetch()) {
-                $errors[] = "Username or email already exists";
+                $errors[] = "Username already exists";
             }
         } catch (PDOException $e) {
             $errors[] = "Database error. Please try again.";
@@ -121,14 +113,16 @@ if ($_POST) {
             $stmt->execute();
             $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
             
-            if (in_array('full_name', $columns)) {
-                // full_name column exists
+            // Check which columns exist and insert accordingly
+            if (in_array('full_name', $columns) && in_array('email', $columns)) {
                 $stmt = $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)");
-                $result = $stmt->execute([$username, $email, $hashedPassword, $fullName, $role]);
+                $result = $stmt->execute([$username, '', $hashedPassword, $fullName, $role]);
+            } elseif (in_array('full_name', $columns)) {
+                $stmt = $pdo->prepare("INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)");
+                $result = $stmt->execute([$username, $hashedPassword, $fullName, $role]);
             } else {
-                // full_name column doesn't exist, insert without it
-                $stmt = $pdo->prepare("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
-                $result = $stmt->execute([$username, $email, $hashedPassword, $role]);
+                $stmt = $pdo->prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
+                $result = $stmt->execute([$username, $hashedPassword, $role]);
             }
             
             if ($result) {
@@ -137,7 +131,7 @@ if ($_POST) {
                 // Log the signup activity
                 $logger->logUserActivity(
                     'signup',
-                    "New user registered: {$username} ({$email}) as {$role}",
+                    "New user registered: {$username} as {$role}",
                     $userId,
                     $username
                 );
@@ -295,42 +289,8 @@ if ($_POST) {
             margin-top: 5px;
         }
         
-        .email-domain {
-            font-size: 0.8rem;
-            color: #001f75;
-            margin-top: 5px;
-            font-weight: 500;
-        }
-        
         .form-floating {
             position: relative;
-        }
-        
-        .role-selection {
-            background: #f8f9ff;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px 0;
-        }
-        
-        .role-option {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .role-option:last-child {
-            margin-bottom: 0;
-        }
-        
-        .role-option input[type="radio"] {
-            margin-right: 10px;
-        }
-        
-        .role-description {
-            font-size: 0.85rem;
-            color: #666;
-            margin-left: 25px;
         }
         
         .debug-info {
@@ -355,16 +315,7 @@ if ($_POST) {
                         <p>ISAT U LibCollect: Reference Mapping System</p>
                     </div>
                     
-                    <!-- Debug Information (remove in production) -->
-                    <?php if (isset($_GET['debug'])): ?>
-                    <div class="debug-info">
-                        <strong>Debug Info:</strong><br>
-                        Database Connected: <?php echo isset($pdo) ? 'Yes' : 'No'; ?><br>
-                        ActivityLogger: <?php echo class_exists('ActivityLogger') ? 'Available' : 'Using Fallback'; ?><br>
-                        Current Directory: <?php echo __DIR__; ?><br>
-                        Document Root: <?php echo $_SERVER['DOCUMENT_ROOT'] ?? 'Not set'; ?>
-                    </div>
-                    <?php endif; ?>
+
                     
                     <?php if (!empty($errors)): ?>
                         <div class="alert alert-danger">
@@ -400,7 +351,7 @@ if ($_POST) {
                         </div>
                         
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-12 mb-3">
                                 <label for="username" class="form-label">
                                     <i class="fas fa-at me-1"></i>Username
                                 </label>
@@ -414,41 +365,6 @@ if ($_POST) {
                                     3+ characters, letters, numbers, and underscores only
                                 </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="email" class="form-label">
-                                    Staff Email
-                                </label>
-                                <input type="email" 
-                                       class="form-control" 
-                                       id="email" 
-                                       name="email" 
-                                       placeholder="admin@staff.isatu.edu.ph"
-                                       value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>"
-                                       required>
-                                <div class="email-domain">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Must end with @staff.isatu.edu.ph
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="role-selection">
-                            <label class="form-label">
-                                <i class="fas fa-user-tag me-1"></i>Role
-                            </label>
-                            <div class="role-option">
-                                <input type="radio" id="staff" name="role" value="staff" 
-                                       <?php echo (!isset($_POST['role']) || $_POST['role'] === 'staff') ? 'checked' : ''; ?>>
-                                <label for="staff">Staff</label>
-                            </div>
-                            <div class="role-description">General library staff with basic access</div>
-                            
-                            <!--<div class="role-option">
-                                <input type="radio" id="librarian" name="role" value="librarian"
-                                       <?php echo (isset($_POST['role']) && $_POST['role'] === 'librarian') ? 'checked' : ''; ?>>
-                                <label for="librarian">Librarian</label>
-                            </div>-->
-                            <div class="role-description">Library management with advanced features</div>
                         </div>
                         
                         <div class="row">
@@ -479,7 +395,7 @@ if ($_POST) {
                         
                         <div class="d-grid gap-2 mb-3">
                             <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-user-plus me-2"></i>Create Staff Account
+                                <i class="fas fa-user-plus me-2"></i>Create Account
                             </button>
                         </div>
                     </form>
