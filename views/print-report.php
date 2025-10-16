@@ -342,6 +342,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             font-size: 10pt;
             margin: 8px 0;
             text-align: center;
+            font-weight: bold;
         }
 
         /* Course Section */
