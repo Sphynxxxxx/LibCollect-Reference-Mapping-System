@@ -735,13 +735,14 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                 
                 <div class="course-description">
                     <?php 
-                    // Priority: Custom description from DB > Book description > Department default description
                     if (!empty($subjectData['custom_description'])) {
                         echo $subjectData['custom_description'];
                     } elseif (!empty($subjectData['description'])) {
                         echo $subjectData['description'];
-                    } else {
+                    } elseif (isset($departments[$groupData['department']]['description']) && !empty($departments[$groupData['department']]['description'])) {
                         echo $departments[$groupData['department']]['description'];
+                    } else {
+                        echo ''; 
                     }
                     ?>
                 </div>

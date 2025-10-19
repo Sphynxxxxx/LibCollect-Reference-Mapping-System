@@ -14,27 +14,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($action === 'update_profile') {
         $username = trim($_POST['username']);
         $full_name = trim($_POST['full_name']);
-        $email = trim($_POST['email']);
-        $phone = trim($_POST['phone']);
-        $department = $_POST['department'];
-        $position = $_POST['position'];
-        $bio = trim($_POST['bio']);
         
         // Validate required fields
-        if (empty($username) || empty($full_name) || empty($email)) {
-            $_SESSION['error'] = 'Username, full name, and email are required.';
+        if (empty($username) || empty($full_name)) {
+            $_SESSION['error'] = 'Username and full name are required.';
         } else {
             try {
                 // Update profile information
                 $stmt = $pdo->prepare("
                     UPDATE users 
-                    SET username = ?, full_name = ?, email = ?, phone = ?, 
-                        department = ?, position = ?, bio = ?, updated_at = NOW()
+                    SET username = ?, full_name = ?, updated_at = NOW()
                     WHERE id = ?
                 ");
                 
                 $user_id = $_SESSION['user_id'] ?? 1; // Default to 1 if not set
-                $stmt->execute([$username, $full_name, $email, $phone, $department, $position, $bio, $user_id]);
+                $stmt->execute([$username, $full_name, $user_id]);
                 
                 $_SESSION['success'] = 'Profile updated successfully!';
                 $_SESSION['user_name'] = $username; // Update session username
@@ -93,8 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 try {
     $user_id = $_SESSION['user_id'] ?? 1;
     $stmt = $pdo->prepare("
-        SELECT username, full_name, email, phone, department, position, 
-               bio, created_at, updated_at, last_login
+        SELECT username, full_name, created_at, updated_at, last_login
         FROM users 
         WHERE id = ?
     ");
@@ -106,11 +99,6 @@ try {
         $user = [
             'username' => 'admin',
             'full_name' => 'System Administrator',
-            'email' => 'admin@isatu.edu.ph',
-            'phone' => '',
-            'department' => 'Library',
-            'position' => 'Librarian',
-            'bio' => '',
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => null,
             'last_login' => null
@@ -121,11 +109,6 @@ try {
     $user = [
         'username' => 'admin',
         'full_name' => 'System Administrator',
-        'email' => 'admin@isatu.edu.ph',
-        'phone' => '',
-        'department' => 'Library',
-        'position' => 'Librarian',
-        'bio' => '',
         'created_at' => date('Y-m-d H:i:s'),
         'updated_at' => null,
         'last_login' => null
@@ -182,28 +165,6 @@ include '../includes/header.php';
                         </div>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Email Address *</label>
-                            <input type="email" class="form-control" name="email" 
-                                   value="<?php echo htmlspecialchars($user['email']); ?>" required>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Position</label>
-                            <input type="text" class="form-control" name="position" 
-                                   value="Librarian" readonly style="background-color: #f8f9fa;">
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Department</label>
-                            <input type="text" class="form-control" name="department" 
-                                   value="Library" readonly style="background-color: #f8f9fa;">
-                        </div>
-                    </div>
-                
-                    
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save me-1"></i>Update Profile
@@ -230,26 +191,12 @@ include '../includes/header.php';
                         <i class="fas fa-user-circle fa-5x text-primary"></i>
                     </div>
                     <h6 class="mb-1"><?php echo htmlspecialchars($user['full_name']); ?></h6>
-                    <small class="text-muted"><?php echo htmlspecialchars($user['position']); ?></small>
+                    <small class="text-muted">Librarian</small>
                 </div>
                 
                 <hr>
                 
                 <div class="profile-details">
-                    <div class="mb-2">
-                        <small class="text-muted">Department:</small>
-                        <div><?php echo htmlspecialchars($user['department']); ?></div>
-                    </div>
-                    <div class="mb-2">
-                        <small class="text-muted">Email:</small>
-                        <div><?php echo htmlspecialchars($user['email']); ?></div>
-                    </div>
-                    <?php if ($user['phone']): ?>
-                    <div class="mb-2">
-                        <small class="text-muted">Phone:</small>
-                        <div><?php echo htmlspecialchars($user['phone']); ?></div>
-                    </div>
-                    <?php endif; ?>
                     <div class="mb-2">
                         <small class="text-muted">Member Since:</small>
                         <div><?php echo date('M d, Y', strtotime($user['created_at'])); ?></div>
@@ -300,87 +247,11 @@ include '../includes/header.php';
     </div>
 </div>
 
-<!-- Activity & Statistics (Optional) -->
-<!--<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Account Activity</h5>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-md-3">
-                        <div class="stat-item">
-                            <i class="fas fa-book fa-2x text-primary mb-2"></i>
-                            <h4 class="mb-1">0</h4>
-                            <small class="text-muted">Books Added</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-item">
-                            <i class="fas fa-archive fa-2x text-warning mb-2"></i>
-                            <h4 class="mb-1">0</h4>
-                            <small class="text-muted">Books Archived</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-item">
-                            <i class="fas fa-edit fa-2x text-info mb-2"></i>
-                            <h4 class="mb-1">0</h4>
-                            <small class="text-muted">Records Modified</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-item">
-                            <i class="fas fa-calendar fa-2x text-success mb-2"></i>
-                            <h4 class="mb-1">
-                                <?php echo $user['updated_at'] ? date('M d', strtotime($user['updated_at'])) : 'N/A'; ?>
-                            </h4>
-                            <small class="text-muted">Last Update</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>-->
-
 <script>
 // Form validation and enhancement
 document.addEventListener('DOMContentLoaded', function() {
     // Profile form validation
     const profileForm = document.getElementById('profileForm');
-    const bioTextarea = document.querySelector('textarea[name="bio"]');
-    
-    // Bio character counter
-    if (bioTextarea) {
-        const maxLength = 500;
-        
-        function updateCounter() {
-            const currentLength = bioTextarea.value.length;
-            let counter = document.getElementById('bioCounter');
-            
-            if (!counter) {
-                counter = document.createElement('small');
-                counter.id = 'bioCounter';
-                counter.className = 'text-muted';
-                bioTextarea.parentNode.appendChild(counter);
-            }
-            
-            counter.textContent = `${currentLength}/${maxLength} characters`;
-            
-            if (currentLength > maxLength) {
-                counter.className = 'text-danger';
-                bioTextarea.value = bioTextarea.value.substring(0, maxLength);
-                counter.textContent = `${maxLength}/${maxLength} characters`;
-            } else {
-                counter.className = 'text-muted';
-            }
-        }
-        
-        bioTextarea.addEventListener('input', updateCounter);
-        updateCounter(); // Initial call
-    }
     
     // Password form validation
     const passwordForm = document.getElementById('passwordForm');
@@ -424,27 +295,6 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Changing...';
         submitBtn.disabled = true;
     });
-    
-    // Phone number formatting
-    const phoneInput = document.querySelector('input[name="phone"]');
-    if (phoneInput) {
-        phoneInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            if (value.startsWith('63')) {
-                value = value.substring(2);
-            }
-            if (value.length > 0) {
-                if (value.length <= 3) {
-                    value = `+63 ${value}`;
-                } else if (value.length <= 6) {
-                    value = `+63 ${value.substring(0, 3)} ${value.substring(3)}`;
-                } else {
-                    value = `+63 ${value.substring(0, 3)} ${value.substring(3, 6)} ${value.substring(6, 10)}`;
-                }
-            }
-            e.target.value = value;
-        });
-    }
 });
 
 // Profile picture hover effect (placeholder for future implementation)
@@ -470,17 +320,6 @@ document.addEventListener('DOMContentLoaded', function() {
 .profile-avatar:hover {
     transform: scale(1.05);
     opacity: 0.8;
-}
-
-.stat-item {
-    padding: 1rem;
-    border-radius: 8px;
-    transition: all 0.3s ease;
-}
-
-.stat-item:hover {
-    background-color: rgba(0,0,0,0.05);
-    transform: translateY(-2px);
 }
 
 .profile-details > div {
