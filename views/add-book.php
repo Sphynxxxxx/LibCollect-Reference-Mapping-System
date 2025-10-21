@@ -15,13 +15,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $categories = isset($_POST['category']) ? $_POST['category'] : [];
     $year_levels = isset($_POST['year_level']) ? $_POST['year_level'] : [];
     $semesters = isset($_POST['semester']) ? $_POST['semester'] : [];
+    $specialized_track = isset($_POST['specialized_track']) ? trim($_POST['specialized_track']) : '';
     
     $success_count = 0;
     $error_count = 0;
     $pending_count = 0;
     $total_quantity = $_POST['quantity'];
     
-    // Handle ISBN data - could be single ISBN or array of ISBNs
+    // Handle ISBN data
     $isbn_data = [];
     if (isset($_POST['isbn'])) {
         if (is_array($_POST['isbn'])) {
@@ -31,7 +32,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
-    // Determine how to handle the books
     $same_book = isset($_POST['same_book']) && $_POST['same_book'] === 'true';
     $unique_isbns = array_unique(array_filter($isbn_data));
     
@@ -58,7 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Convert arrays to comma-separated strings for storage
         $categories_str = !empty($categories) ? implode(',', $categories) : '';
         $year_levels_str = !empty($year_levels) ? implode(',', $year_levels) : '';
-        $semesters_str = !empty($semesters) ? implode(',', $semesters) : '';
+        
+        // IMPORTANT: For Specialized Track, don't store semester
+        $semesters_str = '';
+        if (!empty($year_levels_str) && $year_levels_str !== 'Specialized Track') {
+            // Only store semester for regular year levels
+            $semesters_str = !empty($semesters) ? implode(',', $semesters) : '';
+        }
         
         // Get program value from form
         $program = isset($_POST['selected_program']) ? $_POST['selected_program'] : '';
@@ -69,12 +75,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             'author' => $_POST['author'],
             'isbn' => $current_isbn,
             'category' => $categories_str,
-            'program' => $program,  // ADD THIS LINE
+            'program' => $program, 
+            'specialized_track' => !empty($specialized_track) ? $specialized_track : null,
             'quantity' => 1,
-            'description' => $_POST['description'],
             'subject_name' => $_POST['subject_name'] ?? '',
-            'semester' => $semesters_str,
-            'section' => '',
+            'semester' => $semesters_str, 
             'year_level' => $year_levels_str,
             'course_code' => $_POST['course_code'] ?? '',
             'publication_year' => $publication_year,
@@ -87,10 +92,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // If book is 5+ years old, add to PENDING archives
         if ($should_pending_archive) {
             try {
-                $sql = "INSERT INTO pending_archives (title, author, isbn, category, program, quantity, description, 
-                        subject_name, semester, section, year_level, course_code, publication_year, 
+                $sql = "INSERT INTO pending_archives (title, author, isbn, category, program, specialized_track, quantity,
+                        subject_name, semester, year_level, course_code, publication_year, 
                         book_copy_number, total_quantity, is_multi_context, same_book_series) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";  // ADD ? for program
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";  
                 
                 $stmt = $pdo->prepare($sql);
                 $result = $stmt->execute([
@@ -98,12 +103,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $data['author'],
                     $data['isbn'],
                     $data['category'],
-                    $data['program'],  // ADD THIS LINE
+                    $data['program'],
+                    $data['specialized_track'],
                     $data['quantity'],
-                    $data['description'],
                     $data['subject_name'],
                     $data['semester'],
-                    $data['section'],
                     $data['year_level'],
                     $data['course_code'],
                     $data['publication_year'],
@@ -396,17 +400,35 @@ include '../includes/header.php';
                                         <option value="Second Year" <?php echo $submitted_year_filter === 'Second Year' ? 'selected' : ''; ?>>Second Year</option>
                                         <option value="Third Year" <?php echo $submitted_year_filter === 'Third Year' ? 'selected' : ''; ?>>Third Year</option>
                                         <option value="Fourth Year" <?php echo $submitted_year_filter === 'Fourth Year' ? 'selected' : ''; ?>>Fourth Year</option>
-                                        <option value="Graduate" <?php echo $submitted_year_filter === 'Graduate' ? 'selected' : ''; ?>>Graduate</option>
+                                        <option value="Specialized Track" <?php echo $submitted_year_filter === 'Specialized Track' ? 'selected' : ''; ?>>Specialized Track</option>
                                     </select>
                                 </div>
-                                <div class="col-md-6 mb-3">
+
+                                <div class="col-md-6 mb-3" id="semesterFilterContainer">
                                     <label class="form-label">Select Semester *</label>
                                     <select class="form-select" id="semesterFilter" name="selected_semester">
                                         <option value="">-- Select semester --</option>
                                         <option value="First Semester" <?php echo $submitted_semester_filter === 'First Semester' ? 'selected' : ''; ?>>First Semester</option>
                                         <option value="Second Semester" <?php echo $submitted_semester_filter === 'Second Semester' ? 'selected' : ''; ?>>Second Semester</option>
-            
                                     </select>
+                                </div>
+                            </div>
+
+                            <!-- Specialized Track Selection Row -->
+                            <div class="row" id="specializedTrackRow" style="display: none;">
+                                <div class="col-md-12 mb-3">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-star text-warning me-2"></i>
+                                        <strong>Select Your Track:</strong> Choose from available specialized tracks for Fourth Year
+                                    </div>
+                                    <label class="form-label">Choose Specialized Track *</label>
+                                    <select class="form-select" id="specializedTrackSelect" name="specialized_track">
+                                        <option value="">-- Select a specialized track --</option>
+                                        <!-- Options will be populated by JavaScript -->
+                                    </select>
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>Select your specialized track to view track-specific subjects
+                                    </small>
                                 </div>
                             </div>
                         </div>
@@ -457,12 +479,6 @@ include '../includes/header.php';
                         </div>
                     </div>
 
-                    <!-- Description -->
-                    <!--<div class="mb-3">
-                        <label class="form-label">Description</label>
-                        <textarea class="form-control" name="description" rows="4" 
-                                placeholder="Brief description of the book content, learning objectives, or course relevance..."><?php echo isset($_POST['description']) ? htmlspecialchars($_POST['description']) : ''; ?></textarea>
-                    </div>-->
 
                     <!-- Preview Section -->
                     <div class="mb-4" id="previewSection" style="display: none;">
@@ -558,6 +574,53 @@ const courseData = {
     'COMPSTUD': {
         'BSIS': {
             name: 'Bachelor of Science in Information Systems',
+            hasSpecializedTracks: true,
+            specializedTracks: {
+                'BUSINESS_ANALYTICS': {
+                    name: 'Business Analytics Track',
+                    courses: [
+                        {code: 'IT 120', name: 'Fundamentals of Business Analytics', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'IT 121', name: 'Fundamentals of Enterprise Data Management', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'IT 122', name: 'Fundamentals of Analytics Modeling', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'IT 123', name: 'Analytics Techniques and Tools', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'IT 124', name: 'Analytics Application', year: 'Fourth Year', semester: 'First Semester'}
+                    ]
+                },
+                'SERVICE_MANAGEMENT_BPO': {
+                    name: 'Service Management for Business Process Outsourcing',
+                    courses: [
+                        {code: 'English 2', name: 'Business Communication', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'IS 121', name: 'Service Culture', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'IS 122', name: 'Business Process Outsourcing 1', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'IS 123', name: 'Systems Thinking', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'IS 124', name: 'Business Process Outsourcing 2', year: 'Fourth Year', semester: 'First Semester'}
+                    ]
+                },
+                'ANIMATION': {
+                    name: 'Animation Track',
+                    courses: [
+                        {code: 'ANIM 101', name: 'Fundamentals of Animation', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'ANIM 102', name: 'Fundamentals of Digital 2D Animation', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'ANIM 103', name: 'Advanced Digital 2D Animation', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'ANIM 104', name: 'Introduction to 3D Animation', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'ANIM 105', name: 'Animation Project', year: 'Fourth Year', semester: 'First Semester'}
+                    ]
+                },
+                'DATA_SCIENCE': {
+                    name: 'Data Science Track',
+                    courses: [
+                        {code: 'CS 101', name: 'Data Science Tools and Programming', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'CS 102', name: 'Data Preparation', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'CS 103', name: 'Exploratory Data Analysis', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'CS 104', name: 'Statistical Inference and Regression Models', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'CS 105', name: 'Practical Machine Learning', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'FE IS 1', name: 'Computer Aided Design', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'FE IS 2', name: 'Computer Animation 1', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'FE IS 3', name: 'Computer Animation 2', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'FE IS 4', name: 'Computer Graphics & Image Processing', year: 'Fourth Year', semester: 'First Semester'}
+                    ]
+                }
+            },
             courses: [
                 {code: 'CS 1', name: 'Programming Logic Formulation', year: 'First Year', semester: 'First Semester'},
                 {code: 'ICT 102', name: 'Introduction to Computing', year: 'First Year', semester: 'First Semester'},
@@ -610,6 +673,32 @@ const courseData = {
         },
         'BSIT': {
             name: 'Bachelor of Science in Information Technology',
+            hasSpecializedTracks: true,
+            specializedTracks: {
+                'ANIMATION': {
+                    name: 'Animation Track',
+                    courses: [
+                        {code: 'ANIM 102', name: 'Fundamentals of Digital 2D Animation', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'ANIM 103', name: 'Advanced Digital 2D Animation', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'ANIM 104', name: 'Introduction to 3D Animation', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'ANIM 105', name: 'Animation Project', year: 'Fourth Year', semester: 'First Semester'}
+                    ]
+                },
+                'DATA_SCIENCE': {
+                    name: 'Data Science Track',
+                    courses: [
+                        {code: 'CS 101', name: 'Data Science Tools and Programming', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'CS 102', name: 'Data Preparation', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'CS 103', name: 'Exploratory Data Analysis', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'CS 104', name: 'Statistical Inference and Regression Models', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'CS 105', name: 'Practical Machine Learning', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'FE IS 1', name: 'Computer Aided Design', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'FE IS 2', name: 'Computer Animation 1', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'FE IS 3', name: 'Computer Animation 2', year: 'Fourth Year', semester: 'First Semester'},
+                        {code: 'FE IS 4', name: 'Computer Graphics & Image Processing', year: 'Fourth Year', semester: 'First Semester'}
+                    ]
+                }
+            },
             courses: [
                 {code: 'CS 1', name: 'Programming Logic Formulation', year: 'First Year', semester: 'First Semester'},
                 {code: 'ICT 102', name: 'Introduction to Computing', year: 'First Year', semester: 'First Semester'},
@@ -1385,7 +1474,126 @@ document.getElementById('programSelect').addEventListener('change', function() {
 
 // Year Level Filter handler
 document.getElementById('yearLevelFilter').addEventListener('change', function() {
-    filterAndDisplaySubjects();
+    const selectedYear = this.value;
+    handleSpecializedTracks(selectedYear);
+    
+    // Only filter subjects if NOT "Specialized Track" year level
+    if (selectedYear === 'Specialized Track') {
+        // Hide subject section until track is selected
+        document.getElementById('subjectSection').style.display = 'none';
+    } else {
+        // For regular year levels, filter normally
+        filterAndDisplaySubjects();
+    }
+});
+
+// Function to handle specialized tracks
+function handleSpecializedTracks(selectedYear) {
+    const trackRow = document.getElementById('specializedTrackRow');
+    const trackSelect = document.getElementById('specializedTrackSelect');
+    const semesterContainer = document.getElementById('semesterFilterContainer');
+    const semesterSelect = document.getElementById('semesterFilter');
+    
+    console.log('handleSpecializedTracks called:', {
+        selectedYear,
+        currentProgram,
+        currentDepartment,
+        hasSpecializedTracks: currentProgram && courseData[currentDepartment] ? courseData[currentDepartment][currentProgram].hasSpecializedTracks : false
+    });
+    
+    // Check if "Specialized Track" year level is selected AND program supports it
+    if (selectedYear === 'Specialized Track' && 
+        currentProgram && 
+        courseData[currentDepartment] && 
+        courseData[currentDepartment][currentProgram].hasSpecializedTracks) {
+        
+        console.log('Showing specialized tracks row');
+        
+        // Show specialized track row
+        trackRow.style.display = 'block';
+        
+        // Populate specialized tracks
+        trackSelect.innerHTML = '<option value="">-- Select a specialized track --</option>';
+        const tracks = courseData[currentDepartment][currentProgram].specializedTracks;
+        
+        for (const [trackCode, trackData] of Object.entries(tracks)) {
+            const option = document.createElement('option');
+            option.value = trackCode;
+            option.textContent = trackData.name;
+            trackSelect.appendChild(option);
+        }
+        
+        // HIDE semester dropdown when Specialized Track is selected
+        semesterContainer.style.display = 'none';
+        semesterSelect.value = '';
+        
+    } else if (selectedYear === 'Specialized Track') {
+        // "Specialized Track" selected but program doesn't support it
+        trackRow.style.display = 'block';
+        trackSelect.innerHTML = '<option value="">-- Not available for this program --</option>';
+        trackSelect.disabled = true;
+        semesterContainer.style.display = 'none';
+        
+    } else {
+        // Regular year level selected
+        console.log('Hiding specialized tracks row');
+        
+        // Hide specialized track row
+        trackRow.style.display = 'none';
+        trackSelect.value = '';
+        trackSelect.disabled = false;
+        
+        // Show semester selection
+        semesterContainer.style.display = 'block';
+    }
+}
+
+// Specialized Track selection handler
+document.getElementById('specializedTrackSelect').addEventListener('change', function() {
+    const selectedTrack = this.value;
+    const selectedYear = document.getElementById('yearLevelFilter').value;
+    
+    console.log('Track selected:', selectedTrack);
+    
+    if (!currentDepartment || !currentProgram || selectedYear !== 'Specialized Track') {
+        return;
+    }
+    
+    if (selectedTrack) {
+        // Get courses from the selected specialized track
+        const trackData = courseData[currentDepartment][currentProgram].specializedTracks[selectedTrack];
+        const courses = trackData.courses;
+        
+        // Populate subject dropdown with track courses
+        const subjectSelect = document.getElementById('subjectSelect');
+        subjectSelect.innerHTML = '<option value="">-- Select a subject --</option>';
+        
+        if (courses.length === 0) {
+            subjectSelect.innerHTML = '<option value="">-- No subjects available --</option>';
+            document.getElementById('subjectCount').innerHTML = '<span class="text-warning">No subjects found</span>';
+        } else {
+            courses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = JSON.stringify(course);
+                option.textContent = `${course.code} - ${course.name}`;
+                subjectSelect.appendChild(option);
+            });
+            
+            document.getElementById('subjectCount').innerHTML = 
+                `<span class="text-success">${courses.length} specialized track subject(s) available</span>`;
+        }
+        
+        // Show subject section
+        document.getElementById('subjectSection').style.display = 'block';
+        
+    } else {
+        // No track selected
+        document.getElementById('subjectSection').style.display = 'none';
+    }
+    
+    // Reset subject selection
+    document.querySelector('input[name="course_code"]').value = '';
+    document.querySelector('input[name="subject_name"]').value = '';
 });
 
 // Semester Filter handler
@@ -1393,10 +1601,23 @@ document.getElementById('semesterFilter').addEventListener('change', function() 
     filterAndDisplaySubjects();
 });
 
+
+
+
+
 // Function to filter and display subjects based on year level and semester
 function filterAndDisplaySubjects() {
     const selectedYear = document.getElementById('yearLevelFilter').value;
     const selectedSemester = document.getElementById('semesterFilter').value;
+    
+    // Check if specialized tracks should be shown (don't filter in this case)
+    if (selectedYear === 'Fourth Year' && currentProgram && 
+        courseData[currentDepartment] && 
+        courseData[currentDepartment][currentProgram].hasSpecializedTracks) {
+        // Don't filter here, wait for track selection
+        document.getElementById('subjectSection').style.display = 'none';
+        return;
+    }
     
     // Check if both filters are selected
     if (!selectedYear || !selectedSemester) {
@@ -1461,6 +1682,81 @@ document.getElementById('subjectSelect').addEventListener('change', function() {
         document.querySelector('input[name="subject_name"]').value = '';
     }
 });
+
+
+
+// Semester Filter handler
+document.getElementById('semesterFilter').addEventListener('change', function() {
+    filterAndDisplaySubjects();
+});
+
+// Specialized Track selection handler
+document.getElementById('specializedTrackSelect').addEventListener('change', function() {
+    const selectedTrack = this.value;
+    const selectedYear = document.getElementById('yearLevelFilter').value;
+    
+    if (!currentDepartment || !currentProgram || selectedYear !== 'Fourth Year') {
+        return;
+    }
+    
+    let courses = [];
+    
+    if (selectedTrack) {
+        // Get courses from the selected specialized track
+        const trackData = courseData[currentDepartment][currentProgram].specializedTracks[selectedTrack];
+        courses = trackData.courses;
+    } else {
+        // Get regular Fourth Year courses (filter out track-specific courses)
+        const allCourses = courseData[currentDepartment][currentProgram].courses;
+        courses = allCourses.filter(course => course.year === 'Fourth Year');
+        
+        // Remove specialized track courses from regular courses
+        if (courseData[currentDepartment][currentProgram].specializedTracks) {
+            const trackCodes = new Set();
+            Object.values(courseData[currentDepartment][currentProgram].specializedTracks).forEach(track => {
+                track.courses.forEach(course => trackCodes.add(course.code));
+            });
+            courses = courses.filter(course => !trackCodes.has(course.code));
+        }
+    }
+    
+    // Populate subject dropdown
+    const subjectSelect = document.getElementById('subjectSelect');
+    subjectSelect.innerHTML = '<option value="">-- Select a subject --</option>';
+    
+    if (courses.length === 0) {
+        subjectSelect.innerHTML = '<option value="">-- No subjects available --</option>';
+        document.getElementById('subjectCount').innerHTML = '<span class="text-warning">No subjects found</span>';
+    } else {
+        courses.forEach(course => {
+            const option = document.createElement('option');
+            option.value = JSON.stringify(course);
+            option.textContent = selectedTrack 
+                ? `${course.code} - ${course.name} 🌟`
+                : `${course.code} - ${course.name}`;
+            subjectSelect.appendChild(option);
+        });
+        
+        const trackLabel = selectedTrack ? ' (Specialized Track)' : ' (Regular Courses)';
+        document.getElementById('subjectCount').innerHTML = 
+            `<span class="text-success">${courses.length} subject(s) available${trackLabel}</span>`;
+    }
+    
+    // Show subject section
+    document.getElementById('subjectSection').style.display = 'block';
+    
+    // Reset subject selection
+    document.querySelector('input[name="course_code"]').value = '';
+    document.querySelector('input[name="subject_name"]').value = '';
+});
+
+// Semester Filter handler
+document.getElementById('semesterFilter').addEventListener('change', function() {
+    filterAndDisplaySubjects();
+});
+
+
+
 
 
 
@@ -1585,18 +1881,36 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function populateYearAndSemester(courseInfo) {
+    const selectedYearLevel = document.getElementById('yearLevelFilter').value;
+    const specializedTrack = document.getElementById('specializedTrackSelect')?.value || '';
+    
     // Populate Year Level (hidden input for form submission)
     const yearLevelContainer = document.getElementById('yearLevelContainer');
-    yearLevelContainer.innerHTML = `
-        <input type="hidden" name="year_level[]" value="${courseInfo.year}">
-    `;
+    
+    // If Specialized Track year level is selected, use "Specialized Track" as year_level
+    if (selectedYearLevel === 'Specialized Track') {
+        yearLevelContainer.innerHTML = `
+            <input type="hidden" name="year_level[]" value="Specialized Track">
+        `;
+    } else {
+        // For regular year levels, use the course's year level
+        yearLevelContainer.innerHTML = `
+            <input type="hidden" name="year_level[]" value="${courseInfo.year}">
+        `;
+    }
     yearLevelContainer.style.display = 'none';
     
     // Populate Semester (hidden input for form submission)
     const semesterContainer = document.getElementById('semesterContainer');
-    semesterContainer.innerHTML = `
-        <input type="hidden" name="semester[]" value="${courseInfo.semester}">
-    `;
+    
+    // Only populate semester if NOT a specialized track
+    if (selectedYearLevel === 'Specialized Track') {
+        semesterContainer.innerHTML = ''; // Don't store semester for specialized tracks
+    } else {
+        semesterContainer.innerHTML = `
+            <input type="hidden" name="semester[]" value="${courseInfo.semester}">
+        `;
+    }
     semesterContainer.style.display = 'none';
 }
 
@@ -1669,6 +1983,8 @@ function formatISBN(event) {
         event.target.value = value.replace(/(\d{3})(\d{1})(\d{2})(\d{6})(\d{1})/, '$1-$2-$3-$4-$5');
     }
 }
+
+
 
 // Check if book will be sent to pending archives
 function checkAutoArchiveStatus() {
@@ -1803,28 +2119,7 @@ document.querySelector('button[type="reset"]').addEventListener('click', functio
     setTimeout(generateISBNFields, 100);
 });
 
-// Character counter for description
-document.querySelector('textarea[name="description"]').addEventListener('input', function() {
-    const maxLength = 500;
-    const currentLength = this.value.length;
-    
-    let counter = document.getElementById('descriptionCounter');
-    if (!counter) {
-        counter = document.createElement('small');
-        counter.id = 'descriptionCounter';
-        counter.className = 'text-muted';
-        this.parentNode.appendChild(counter);
-    }
-    
-    counter.textContent = `${currentLength}/${maxLength} characters`;
-    
-    if (currentLength > maxLength) {
-        counter.className = 'text-danger';
-        this.value = this.value.substring(0, maxLength);
-    } else {
-        counter.className = 'text-muted';
-    }
-});
+
 </script>
 
 <?php include '../includes/footer.php'; ?>

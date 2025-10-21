@@ -153,6 +153,118 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $_SESSION['message_type'] = 'danger';
                 }
                 break;
+            
+            case 'restore_pending':
+                // Get pending book data
+                $stmt = $pdo->prepare("SELECT * FROM pending_archives WHERE id = ?");
+                $stmt->execute([$_POST['id']]);
+                $pendingBook = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($pendingBook) {
+                    // Prepare data for adding back to active collection WITH BYPASS FLAG
+                    $restoreData = [
+                        'title' => $pendingBook['title'],
+                        'author' => $pendingBook['author'],
+                        'isbn' => $pendingBook['isbn'],
+                        'category' => $pendingBook['category'],
+                        'program' => $pendingBook['program'] ?? null,
+                        'specialized_track' => $pendingBook['specialized_track'] ?? null,
+                        'quantity' => $pendingBook['quantity'],
+                        'description' => $pendingBook['description'] ?? null,
+                        'subject_name' => $pendingBook['subject_name'],
+                        'semester' => $pendingBook['semester'],
+                        'year_level' => $pendingBook['year_level'],
+                        'course_code' => $pendingBook['course_code'],
+                        'publication_year' => $pendingBook['publication_year'],
+                        'book_copy_number' => $pendingBook['book_copy_number'],
+                        'total_quantity' => $pendingBook['total_quantity'],
+                        'is_multi_context' => $pendingBook['is_multi_context'],
+                        'same_book_series' => $pendingBook['same_book_series'],
+                        'bypass_archive_check' => true // Add this flag
+                    ];
+                    
+                    // Add back to active books collection
+                    $result = $book->addBook($restoreData);
+                    
+                    if ($result && $result !== 'archived') {
+                        // Remove from pending archives
+                        $stmt = $pdo->prepare("DELETE FROM pending_archives WHERE id = ?");
+                        $stmt->execute([$_POST['id']]);
+                        
+                        $_SESSION['message'] = 'Book successfully restored to active collection!';
+                        $_SESSION['message_type'] = 'success';
+                    } else {
+                        $_SESSION['message'] = 'Failed to restore book! It would be immediately archived again due to age.';
+                        $_SESSION['message_type'] = 'danger';
+                    }
+                } else {
+                    $_SESSION['message'] = 'Pending book not found!';
+                    $_SESSION['message_type'] = 'danger';
+                }
+                break;
+
+            case 'restore_pending_all':
+                if (isset($_POST['ids'])) {
+                    $ids = explode(',', $_POST['ids']);
+                    $restoredCount = 0;
+                    $errorCount = 0;
+                    
+                    foreach ($ids as $pendingId) {
+                        $pendingId = trim($pendingId);
+                        if (empty($pendingId)) continue;
+                        
+                        // Get pending book data
+                        $stmt = $pdo->prepare("SELECT * FROM pending_archives WHERE id = ?");
+                        $stmt->execute([$pendingId]);
+                        $pendingBook = $stmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        if ($pendingBook) {
+                            // Prepare data for adding back to active collection
+                            $restoreData = [
+                                'title' => $pendingBook['title'],
+                                'author' => $pendingBook['author'],
+                                'isbn' => $pendingBook['isbn'],
+                                'category' => $pendingBook['category'],
+                                'program' => $pendingBook['program'],
+                                'specialized_track' => $pendingBook['specialized_track'] ?? null,
+                                'quantity' => $pendingBook['quantity'],
+                                'subject_name' => $pendingBook['subject_name'],
+                                'semester' => $pendingBook['semester'],
+                                'year_level' => $pendingBook['year_level'],
+                                'course_code' => $pendingBook['course_code'],
+                                'publication_year' => $pendingBook['publication_year'],
+                                'book_copy_number' => $pendingBook['book_copy_number'],
+                                'total_quantity' => $pendingBook['total_quantity'],
+                                'is_multi_context' => $pendingBook['is_multi_context'],
+                                'same_book_series' => $pendingBook['same_book_series']
+                            ];
+                            
+                            // Add back to active books collection
+                            $result = $book->addBook($restoreData);
+                            
+                            if ($result && $result !== 'archived') {
+                                // Remove from pending archives
+                                $stmt = $pdo->prepare("DELETE FROM pending_archives WHERE id = ?");
+                                $stmt->execute([$pendingId]);
+                                $restoredCount++;
+                            } else {
+                                $errorCount++;
+                            }
+                        }
+                    }
+                    
+                    if ($restoredCount > 0) {
+                        $_SESSION['message'] = "Successfully restored {$restoredCount} book(s) to active collection!";
+                        $_SESSION['message_type'] = 'success';
+                        if ($errorCount > 0) {
+                            $_SESSION['message'] .= " ({$errorCount} failed)";
+                        }
+                    } else {
+                        $_SESSION['message'] = 'Failed to restore books!';
+                        $_SESSION['message_type'] = 'danger';
+                    }
+                }
+                break;
                 
             case 'update_archive_reason':
                 if (isset($_POST['final_archive_reason']) && isset($_POST['book_ids'])) {
@@ -1106,16 +1218,58 @@ include '../includes/header.php';
                                         
                                         <!-- Action Buttons -->
                                         <div class="book-actions" onclick="event.stopPropagation();">
-                                            <div class="d-grid gap-1">
-                                                <button type="button" class="btn btn-warning btn-sm" 
-                                                        onclick="event.stopPropagation(); openArchiveReasonModal(<?php echo $book['id']; ?>)">
-                                                    <i class="fas fa-archive me-1"></i>Select Reason & Archive
-                                                </button>
-                                                <button type="button" class="btn btn-outline-danger btn-sm" 
-                                                        onclick="event.stopPropagation(); deletePendingBook(<?php echo $book['id']; ?>, '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
-                                                    <i class="fas fa-times me-1"></i>Remove from Pending
-                                                </button>
-                                            </div>
+                                            <?php if (count($book['record_ids']) > 1): ?>
+                                                <div class="btn-group w-100" role="group">
+                                                    <button type="button" class="btn btn-warning btn-sm" 
+                                                            onclick="event.stopPropagation(); openArchiveReasonModal(<?php echo $book['id']; ?>)">
+                                                        <i class="fas fa-archive me-1"></i>Archive
+                                                    </button>
+                                                    <button type="button" class="btn btn-warning btn-sm dropdown-toggle dropdown-toggle-split" 
+                                                            data-bs-toggle="dropdown" aria-expanded="false"
+                                                            onclick="event.stopPropagation();">
+                                                        <span class="visually-hidden">Toggle Dropdown</span>
+                                                    </button>
+                                                    <ul class="dropdown-menu" onclick="event.stopPropagation();">
+                                                        <li><h6 class="dropdown-header">Manage Records</h6></li>
+                                                        <li>
+                                                            <a class="dropdown-item text-success" href="#" 
+                                                            onclick="event.preventDefault(); event.stopPropagation(); confirmRestorePendingAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                                <i class="fas fa-undo me-2"></i>Restore All Records
+                                                            </a>
+                                                        </li>
+                                                        <?php foreach ($book['record_ids'] as $index => $recordId): ?>
+                                                            <li>
+                                                                <a class="dropdown-item" href="#" 
+                                                                onclick="event.preventDefault(); event.stopPropagation(); restorePendingBook(<?php echo $recordId; ?>, '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                                    <i class="fas fa-undo me-2"></i>Restore Record #<?php echo $recordId; ?>
+                                                                </a>
+                                                            </li>
+                                                        <?php endforeach; ?>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger" href="#" 
+                                                            onclick="event.preventDefault(); event.stopPropagation(); confirmDeletePendingAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                                <i class="fas fa-times me-2"></i>Remove All from Pending
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="d-grid gap-1">
+                                                    <button type="button" class="btn btn-warning btn-sm" 
+                                                            onclick="event.stopPropagation(); openArchiveReasonModal(<?php echo $book['id']; ?>)">
+                                                        <i class="fas fa-archive me-1"></i>Select Reason & Archive
+                                                    </button>
+                                                    <button type="button" class="btn btn-success btn-sm" 
+                                                            onclick="event.stopPropagation(); restorePendingBook(<?php echo $book['id']; ?>, '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                        <i class="fas fa-undo me-1"></i>Restore to Active
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                            onclick="event.stopPropagation(); deletePendingBook(<?php echo $book['id']; ?>, '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                        <i class="fas fa-times me-1"></i>Remove from Pending
+                                                    </button>
+                                                </div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 </div>
@@ -2193,6 +2347,57 @@ function loadUserPreferences() {
                 }
             });
         }, 100);
+    }
+}
+
+// Restore pending book to active collection
+function restorePendingBook(id, title) {
+    if (confirm(`Are you sure you want to restore "${title}" back to the active collection?\n\nThis will remove it from pending archives and add it back to the library.`)) {
+        // Show loading state
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Restoring...';
+        button.disabled = true;
+        
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="action" value="restore_pending">
+            <input type="hidden" name="id" value="${id}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+        
+        // Re-enable button after 3 seconds in case submission fails
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }, 3000);
+    }
+}
+
+// Confirm restore all pending records
+function confirmRestorePendingAll(ids, title) {
+    if (confirm(`Are you sure you want to restore all ${ids.length} records of "${title}" back to the active collection?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="action" value="restore_pending_all">
+            <input type="hidden" name="ids" value="${ids.join(',')}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Confirm delete all pending records
+function confirmDeletePendingAll(ids, title) {
+    if (confirm(`Are you sure you want to remove all ${ids.length} records of "${title}" from pending archives?`)) {
+        ids.forEach((id, index) => {
+            setTimeout(() => {
+                deletePendingBook(id, title);
+            }, index * 100);
+        });
     }
 }
 

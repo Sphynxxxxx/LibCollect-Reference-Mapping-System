@@ -27,7 +27,6 @@ class Book {
                 description TEXT DEFAULT NULL,
                 subject_name VARCHAR(255) DEFAULT NULL,
                 semester VARCHAR(50) DEFAULT NULL,
-                section VARCHAR(50) DEFAULT NULL,
                 year_level VARCHAR(50) DEFAULT NULL,
                 course_code VARCHAR(100) DEFAULT NULL,
                 publication_year INT(4) DEFAULT NULL,
@@ -77,8 +76,8 @@ class Book {
             
             // Insert into archived_books
             $sql = "INSERT INTO archived_books (
-                original_id, title, author, isbn, category, quantity, description, 
-                subject_name, semester, section, year_level, course_code, publication_year,
+                original_id, title, author, isbn, category, quantity,
+                subject_name, semester, year_level, course_code, publication_year,
                 book_copy_number, total_quantity, is_multi_context, same_book_series,
                 original_created_at, original_updated_at, archived_at, archive_reason, archived_by
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW(), ?, ?)";
@@ -91,10 +90,8 @@ class Book {
                 $bookData['isbn'] ?? '',
                 $bookData['category'],
                 $bookData['quantity'] ?? 1,
-                $bookData['description'] ?? '',
                 $bookData['subject_name'] ?? '',
                 $bookData['semester'] ?? '',
-                $bookData['section'] ?? '',
                 $bookData['year_level'] ?? '',
                 $bookData['course_code'] ?? '',
                 $bookData['publication_year'] ?? null,
@@ -325,17 +322,15 @@ class Book {
                 return false;
             }
             
-            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, quantity, description, subject_name, semester, section, year_level, course_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, quantity, subject_name, semester, year_level, course_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $result = $stmt->execute([
                 $data['title'],
                 $data['author'],
                 $data['isbn'] ?? '',
                 $data['category'],
                 $data['quantity'] ?? 1,
-                $data['description'] ?? '',
                 $data['subject_name'] ?? '',
                 $data['semester'] ?? '',
-                $data['section'] ?? '',
                 $data['year_level'] ?? '',
                 $data['course_code'] ?? ''
             ]);
@@ -395,7 +390,12 @@ class Book {
      */
     public function getAllBooks($category = '', $search = '', $yearLevel = '', $semester = '') {
         try {
-            $query = "SELECT * FROM books WHERE 1=1";
+            $query = "SELECT 
+                id, title, author, isbn, category, program, specialized_track,
+                quantity, subject_name, semester, year_level, course_code,
+                publication_year, book_copy_number, total_quantity,
+                is_multi_context, same_book_series, created_at
+                FROM books WHERE 1=1";
             $params = [];
             
             // Category filtering with comma-separated support
@@ -420,7 +420,8 @@ class Book {
             }
             
             if ($search) {
-                $query .= " AND (title LIKE ? OR author LIKE ? OR isbn LIKE ? OR description LIKE ?)";
+                $query .= " AND (title LIKE ? OR author LIKE ? OR isbn LIKE ? OR subject_name LIKE ? OR course_code LIKE ?)";
+                $params[] = "%$search%";
                 $params[] = "%$search%";
                 $params[] = "%$search%";
                 $params[] = "%$search%";
@@ -477,12 +478,6 @@ class Book {
                 $params[] = $filters['semester'];
             }
             
-            // Section filtering
-            if (!empty($filters['section'])) {
-                $query .= " AND (section = ? OR FIND_IN_SET(?, section) > 0)";
-                $params[] = $filters['section'];
-                $params[] = $filters['section'];
-            }
             
             // Publication year filtering
             if (!empty($filters['publication_year_min'])) {
@@ -519,7 +514,7 @@ class Book {
     /**
      * Get books by specific academic context
      */
-    public function getBooksByAcademicContext($category, $yearLevel = '', $semester = '', $section = '') {
+    public function getBooksByAcademicContext($category, $yearLevel = '', $semester = '') {
         try {
             $query = "SELECT * FROM books WHERE (category = ? OR FIND_IN_SET(?, category) > 0)";
             $params = [$category, $category];
@@ -536,11 +531,6 @@ class Book {
                 $params[] = $semester;
             }
             
-            if ($section) {
-                $query .= " AND (section = ? OR FIND_IN_SET(?, section) > 0)";
-                $params[] = $section;
-                $params[] = $section;
-            }
             
             $query .= " ORDER BY title ASC";
             
@@ -573,22 +563,25 @@ class Book {
                 return false;
             }
             
-            // Check if this book should be auto-archived
-            $shouldArchive = $this->shouldAutoArchive($data['publication_year'] ?? null);
+            // CHECK FOR BYPASS FLAG FIRST - if bypass_archive_check is set, skip auto-archive
+            $bypassArchive = $data['bypass_archive_check'] ?? false;
+            $shouldArchive = false;
             
-            // Check if this is a multi-context book
+            if (!$bypassArchive) {
+                $shouldArchive = $this->shouldAutoArchive($data['publication_year'] ?? null);
+            }
+            
+            // Rest of your existing code remains the same...
             $categories = is_array($data['category']) ? $data['category'] : explode(',', $data['category']);
             $yearLevels = is_array($data['year_level']) ? $data['year_level'] : explode(',', $data['year_level'] ?? '');
             $semesters = is_array($data['semester']) ? $data['semester'] : explode(',', $data['semester'] ?? '');
-            $sections = is_array($data['section']) ? $data['section'] : explode(',', $data['section'] ?? '');
             
-            $isMultiContext = (count($categories) > 1 || count($yearLevels) > 1 || count($semesters) > 1 || count($sections) > 1) ? 1 : 0;
+            $isMultiContext = (count($categories) > 1 || count($yearLevels) > 1 || count($semesters) > 1) ? 1 : 0;
             
             // Convert arrays to comma-separated strings
             $categoryStr = is_array($data['category']) ? implode(',', $data['category']) : $data['category'];
             $yearLevelStr = is_array($data['year_level']) ? implode(',', $data['year_level']) : ($data['year_level'] ?? '');
             $semesterStr = is_array($data['semester']) ? implode(',', $data['semester']) : ($data['semester'] ?? '');
-            $sectionStr = is_array($data['section']) ? implode(',', $data['section']) : ($data['section'] ?? '');
             
             // Prepare data with multi-context support
             $bookData = [
@@ -596,12 +589,11 @@ class Book {
                 'author' => $data['author'],
                 'isbn' => $data['isbn'] ?? '',
                 'category' => $categoryStr,
-                'program' => $data['program'] ?? '',  // ADD PROGRAM FIELD
+                'program' => $data['program'] ?? '',  
+                'specialized_track' => $data['specialized_track'] ?? null,  
                 'quantity' => $data['quantity'] ?? 1,
-                'description' => $data['description'] ?? '',
                 'subject_name' => $data['subject_name'] ?? '',
                 'semester' => $semesterStr,
-                'section' => $sectionStr,
                 'year_level' => $yearLevelStr,
                 'course_code' => $data['course_code'] ?? '',
                 'publication_year' => $data['publication_year'] ?? null,
@@ -611,7 +603,7 @@ class Book {
                 'same_book_series' => $data['same_book_series'] ?? 0
             ];
             
-            if ($shouldArchive) {
+            if ($shouldArchive && !$bypassArchive) {
                 // Create archive table if needed
                 $this->createArchivedBooksTable();
                 
@@ -631,20 +623,18 @@ class Book {
                 return false;
             }
             
-            // Normal book addition (not old enough for archive)
-            // ADD 'program' to the INSERT statement
-            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, program, quantity, description, subject_name, semester, section, year_level, course_code, publication_year, book_copy_number, total_quantity, is_multi_context, same_book_series) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            // Normal book addition (not old enough for archive OR bypass is enabled)
+            $stmt = $this->pdo->prepare("INSERT INTO books (title, author, isbn, category, program, specialized_track, quantity, subject_name, semester, year_level, course_code, publication_year, book_copy_number, total_quantity, is_multi_context, same_book_series) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $result = $stmt->execute([
                 $bookData['title'],
                 $bookData['author'],
                 $bookData['isbn'],
                 $bookData['category'],
-                $bookData['program'],  // ADD PROGRAM VALUE
+                $bookData['program'],
+                $bookData['specialized_track'],
                 $bookData['quantity'],
-                $bookData['description'],
                 $bookData['subject_name'],
                 $bookData['semester'],
-                $bookData['section'],
                 $bookData['year_level'],
                 $bookData['course_code'],
                 $bookData['publication_year'],
@@ -657,7 +647,7 @@ class Book {
             if ($result) {
                 $bookId = $this->pdo->lastInsertId();
                 
-                // Log the activity - include program info if available
+                // Log the activity
                 $additionalInfo = "Quantity: {$bookData['quantity']}, Author: {$bookData['author']}";
                 if (!empty($bookData['publication_year'])) {
                     $additionalInfo .= ", Published: {$bookData['publication_year']}";
@@ -665,8 +655,14 @@ class Book {
                 if (!empty($bookData['program'])) {
                     $additionalInfo .= ", Program: {$bookData['program']}";
                 }
+                if (!empty($bookData['specialized_track'])) {
+                    $additionalInfo .= ", Specialized Track: {$bookData['specialized_track']}";
+                }
                 if ($isMultiContext) {
                     $additionalInfo .= " (Multi-context)";
+                }
+                if ($bypassArchive) {
+                    $additionalInfo .= " [RESTORED FROM PENDING]";
                 }
                 
                 $this->logger->logBookActivity(
@@ -701,28 +697,24 @@ class Book {
             $categories = is_array($data['category']) ? $data['category'] : explode(',', $data['category']);
             $yearLevels = is_array($data['year_level']) ? $data['year_level'] : explode(',', $data['year_level'] ?? '');
             $semesters = is_array($data['semester']) ? $data['semester'] : explode(',', $data['semester'] ?? '');
-            $sections = is_array($data['section']) ? $data['section'] : explode(',', $data['section'] ?? '');
             
-            $isMultiContext = (count($categories) > 1 || count($yearLevels) > 1 || count($semesters) > 1 || count($sections) > 1) ? 1 : 0;
+            $isMultiContext = (count($categories) > 1 || count($yearLevels) > 1 || count($semesters) > 1) ? 1 : 0;
             
             // Convert arrays to comma-separated strings
             $categoryStr = is_array($data['category']) ? implode(',', $data['category']) : $data['category'];
             $yearLevelStr = is_array($data['year_level']) ? implode(',', $data['year_level']) : ($data['year_level'] ?? '');
             $semesterStr = is_array($data['semester']) ? implode(',', $data['semester']) : ($data['semester'] ?? '');
-            $sectionStr = is_array($data['section']) ? implode(',', $data['section']) : ($data['section'] ?? '');
             
             // Updated SQL to include is_multi_context
-            $stmt = $this->pdo->prepare("UPDATE books SET title=?, author=?, isbn=?, category=?, quantity=?, description=?, subject_name=?, semester=?, section=?, year_level=?, course_code=?, publication_year=?, book_copy_number=?, total_quantity=?, is_multi_context=?, same_book_series=? WHERE id=?");
+            $stmt = $this->pdo->prepare("UPDATE books SET title=?, author=?, isbn=?, category=?, quantity=?, subject_name=?, semester=?, year_level=?, course_code=?, publication_year=?, book_copy_number=?, total_quantity=?, is_multi_context=?, same_book_series=? WHERE id=?");
             $result = $stmt->execute([
                 $data['title'],
                 $data['author'],
                 $data['isbn'] ?? '',
                 $categoryStr,
                 $data['quantity'] ?? 1,
-                $data['description'] ?? '',
                 $data['subject_name'] ?? '',
                 $semesterStr,
-                $sectionStr,
                 $yearLevelStr,
                 $data['course_code'] ?? '',
                 $data['publication_year'] ?? null,
@@ -818,6 +810,18 @@ class Book {
             $stmt = $this->pdo->query("SELECT COUNT(*) as total FROM books WHERE is_multi_context = 1");
             $stats['multi_context_books'] = $stmt->fetch()['total'] ?? 0;
             
+            // Unique authors
+            $stmt = $this->pdo->query("SELECT COUNT(DISTINCT author) as total FROM books");
+            $stats['unique_authors'] = $stmt->fetch()['total'] ?? 0;
+            
+            // Unique categories
+            $stmt = $this->pdo->query("SELECT COUNT(DISTINCT category) as total FROM books");
+            $stats['unique_categories'] = $stmt->fetch()['total'] ?? 0;
+            
+            // Unique programs
+            $stmt = $this->pdo->query("SELECT COUNT(DISTINCT program) as total FROM books WHERE program IS NOT NULL AND program != ''");
+            $stats['unique_programs'] = $stmt->fetch()['total'] ?? 0;
+            
             // Books by primary category (first category in comma-separated list)
             $stmt = $this->pdo->query("
                 SELECT 
@@ -864,16 +868,34 @@ class Book {
             $stats['by_category_expanded'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             // Books by publication year (recent years)
-            $stmt = $this->pdo->query("SELECT publication_year, COUNT(*) as count FROM books WHERE publication_year IS NOT NULL AND publication_year >= YEAR(NOW()) - 10 GROUP BY publication_year ORDER BY publication_year DESC");
+            $stmt = $this->pdo->query("
+                SELECT publication_year, COUNT(*) as count 
+                FROM books 
+                WHERE publication_year IS NOT NULL AND publication_year >= YEAR(NOW()) - 10 
+                GROUP BY publication_year 
+                ORDER BY publication_year DESC
+            ");
             $stats['by_year'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            // Borrowed books
-            $stmt = $this->pdo->query("SELECT COUNT(*) as borrowed_books FROM borrowing WHERE status = 'borrowed'");
-            $borrowedStats = $stmt->fetch();
-            $stats['borrowed_books'] = $borrowedStats['borrowed_books'] ?? 0;
+            // Recent additions (last 30 days)
+            $stmt = $this->pdo->query("
+                SELECT COUNT(*) as recent_additions 
+                FROM books 
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            ");
+            $stats['recent_additions'] = $stmt->fetch()['recent_additions'] ?? 0;
             
-            // Available copies (total copies - borrowed)
-            $stats['available_copies'] = $stats['total_copies'] - $stats['borrowed_books'];
+            // Archived books count
+            try {
+                $stmt = $this->pdo->query("SELECT COUNT(*) as archived_books FROM archived_books");
+                $stats['archived_books'] = $stmt->fetch()['archived_books'] ?? 0;
+            } catch (PDOException $e) {
+                $stats['archived_books'] = 0;
+            }
+            
+            // All copies are available since borrowing table is removed
+            $stats['available_copies'] = $stats['total_copies'];
+            $stats['borrowed_books'] = 0;
             
             return $stats;
         } catch (PDOException $e) {
@@ -881,9 +903,14 @@ class Book {
             return [
                 'total_books' => 0,
                 'total_copies' => 0,
+                'multi_context_books' => 0,
+                'unique_authors' => 0,
+                'unique_categories' => 0,
+                'unique_programs' => 0,
+                'recent_additions' => 0,
+                'archived_books' => 0,
                 'borrowed_books' => 0,
                 'available_copies' => 0,
-                'multi_context_books' => 0,
                 'by_category' => [],
                 'by_category_expanded' => [],
                 'by_year' => []
@@ -935,7 +962,6 @@ class Book {
                 $book['categories_display'] = str_replace(',', ', ', $book['category']);
                 $book['year_levels_display'] = $book['year_level'] ? str_replace(',', ', ', $book['year_level']) : 'All';
                 $book['semesters_display'] = $book['semester'] ? str_replace(',', ', ', $book['semester']) : 'All';
-                $book['sections_display'] = $book['section'] ? str_replace(',', ', ', $book['section']) : 'All';
                 $book['is_multi_context_display'] = $book['is_multi_context'] ? 'Yes' : 'No';
             }
             
@@ -956,8 +982,8 @@ class Book {
             $headers = [
                 'ID', 'Title', 'Author', 'ISBN', 'Categories', 
                 'Quantity', 'Publication Year', 'Subject Name', 'Course Code',
-                'Year Levels', 'Semesters', 'Sections', 'Multi-Context', 
-                'Description', 'Date Added', 'Last Updated'
+                'Year Levels', 'Semesters', 'Multi-Context', 
+                'Date Added', 'Last Updated'
             ];
             
             $csvData = [];
@@ -976,9 +1002,7 @@ class Book {
                     $book['course_code'] ?? '',
                     $book['year_levels_display'],
                     $book['semesters_display'],
-                    $book['sections_display'],
                     $book['is_multi_context_display'],
-                    $book['description'],
                     $book['created_at'],
                     $book['updated_at']
                 ];
@@ -1006,14 +1030,13 @@ class Book {
             'categories' => $book['category'] ? explode(',', $book['category']) : [],
             'year_levels' => $book['year_level'] ? explode(',', $book['year_level']) : [],
             'semesters' => $book['semester'] ? explode(',', $book['semester']) : [],
-            'sections' => $book['section'] ? explode(',', $book['section']) : []
         ];
     }
 
     /**
      * Check if a book is available for a specific academic context
      */
-    public function isBookAvailableForContext($bookId, $category, $yearLevel = '', $semester = '', $section = '') {
+    public function isBookAvailableForContext($bookId, $category, $yearLevel = '', $semester = '') {
         try {
             $book = $this->getBookById($bookId);
             if (!$book || $book['quantity'] <= 0) {
@@ -1070,7 +1093,6 @@ class Book {
                     category LIKE '%,%' 
                     OR year_level LIKE '%,%' 
                     OR semester LIKE '%,%' 
-                    OR section LIKE '%,%'
                 )
             ");
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1091,7 +1113,6 @@ class Book {
                     WHEN category LIKE '%,%' 
                         OR year_level LIKE '%,%' 
                         OR semester LIKE '%,%' 
-                        OR section LIKE '%,%' 
                     THEN 1 
                     ELSE 0 
                 END
@@ -1605,13 +1626,13 @@ class Book {
         try {
             // Insert into archived_books table
             $sql = "INSERT INTO archived_books (
-                original_id, title, author, isbn, category, quantity, description, 
-                subject_name, semester, section, year_level, course_code, publication_year,
+                original_id, title, author, isbn, category, quantity,
+                subject_name, semester, year_level, course_code, publication_year,
                 book_copy_number, total_quantity, is_multi_context, same_book_series,
                 original_created_at, original_updated_at, archive_reason, archived_by, archiving_method
             ) VALUES (
-                :original_id, :title, :author, :isbn, :category, :quantity, :description,
-                :subject_name, :semester, :section, :year_level, :course_code, :publication_year,
+                :original_id, :title, :author, :isbn, :category, :quantity,
+                :subject_name, :semester, :year_level, :course_code, :publication_year,
                 :book_copy_number, :total_quantity, :is_multi_context, :same_book_series,
                 NOW(), NOW(), :archive_reason, :archived_by, 'manual'
             )";
@@ -1625,10 +1646,8 @@ class Book {
             $stmt->bindValue(':isbn', $data['isbn'] ?? '');
             $stmt->bindValue(':category', $data['category']);
             $stmt->bindValue(':quantity', $data['quantity']);
-            $stmt->bindValue(':description', $data['description'] ?? '');
             $stmt->bindValue(':subject_name', $data['subject_name'] ?? '');
             $stmt->bindValue(':semester', $data['semester'] ?? '');
-            $stmt->bindValue(':section', $data['section'] ?? '');
             $stmt->bindValue(':year_level', $data['year_level'] ?? '');
             $stmt->bindValue(':course_code', $data['course_code'] ?? '');
             $stmt->bindValue(':publication_year', $data['publication_year']);
@@ -1691,76 +1710,62 @@ class Book {
      */
     public function restoreFromArchive($archivedBookId) {
         try {
-            $this->pdo->beginTransaction();
-            
-            // Get archived book details
+            // Get the archived book data
             $stmt = $this->pdo->prepare("SELECT * FROM archived_books WHERE id = ?");
             $stmt->execute([$archivedBookId]);
             $archivedBook = $stmt->fetch(PDO::FETCH_ASSOC);
             
             if (!$archivedBook) {
-                throw new Exception("Archived book not found");
+                return false;
             }
             
-            // Insert back into active books
-            $sql = "INSERT INTO books (
-                title, author, isbn, category, quantity, description, 
-                subject_name, semester, section, year_level, course_code, publication_year,
-                book_copy_number, total_quantity, is_multi_context, same_book_series
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            // Prepare data for restoring to active books
+            $restoreData = [
+                'title' => $archivedBook['title'],
+                'author' => $archivedBook['author'],
+                'isbn' => $archivedBook['isbn'],
+                'category' => $archivedBook['category'],
+                'program' => $archivedBook['program'] ?? null,
+                'specialized_track' => $archivedBook['specialized_track'] ?? null,
+                'quantity' => $archivedBook['quantity'],
+                'description' => $archivedBook['description'] ?? null,
+                'subject_name' => $archivedBook['subject_name'],
+                'semester' => $archivedBook['semester'],
+                'year_level' => $archivedBook['year_level'],
+                'course_code' => $archivedBook['course_code'],
+                'publication_year' => $archivedBook['publication_year'],
+                'book_copy_number' => $archivedBook['book_copy_number'],
+                'total_quantity' => $archivedBook['total_quantity'],
+                'is_multi_context' => $archivedBook['is_multi_context'],
+                'same_book_series' => $archivedBook['same_book_series'],
+                'bypass_archive_check' => true // Bypass auto-archive since we're restoring
+            ];
             
-            $stmt = $this->pdo->prepare($sql);
-            $result = $stmt->execute([
-                $archivedBook['title'],
-                $archivedBook['author'],
-                $archivedBook['isbn'],
-                $archivedBook['category'],
-                $archivedBook['quantity'],
-                $archivedBook['description'],
-                $archivedBook['subject_name'],
-                $archivedBook['semester'],
-                $archivedBook['section'],
-                $archivedBook['year_level'],
-                $archivedBook['course_code'],
-                $archivedBook['publication_year'],
-                $archivedBook['book_copy_number'],
-                $archivedBook['total_quantity'],
-                $archivedBook['is_multi_context'],
-                $archivedBook['same_book_series']
-            ]);
+            // Use addBook method with bypass flag
+            $result = $this->addBook($restoreData);
             
-            if (!$result) {
-                throw new Exception("Failed to restore to active books");
+            if ($result && $result !== 'archived') {
+                // Delete from archived_books
+                $stmt = $this->pdo->prepare("DELETE FROM archived_books WHERE id = ?");
+                $deleteResult = $stmt->execute([$archivedBookId]);
+                
+                if ($deleteResult) {
+                    // Log the restoration activity
+                    $this->logger->logBookActivity(
+                        'restore_from_archive',
+                        ['id' => $result, 'title' => $archivedBook['title'], 'category' => $archivedBook['category']],
+                        "Restored from archive. Original archive reason: " . ($archivedBook['archive_reason'] ?? 'Unknown')
+                    );
+                    return true;
+                }
             }
             
-            $newBookId = $this->pdo->lastInsertId();
-            
-            // Remove from archive
-            $stmt = $this->pdo->prepare("DELETE FROM archived_books WHERE id = ?");
-            $deleteResult = $stmt->execute([$archivedBookId]);
-            
-            if (!$deleteResult) {
-                throw new Exception("Failed to remove from archive");
-            }
-            
-            $this->pdo->commit();
-            
-            // Log the restore activity
-            $this->logger->logBookActivity(
-                'restore',
-                ['id' => $newBookId, 'title' => $archivedBook['title'], 'category' => $archivedBook['category']],
-                "Restored from archive"
-            );
-            
-            return $newBookId;
-            
-        } catch (Exception $e) {
-            $this->pdo->rollBack();
-            error_log("Restore from archive failed: " . $e->getMessage());
+            return false;
+        } catch (PDOException $e) {
+            error_log("Error in restoreFromArchive: " . $e->getMessage());
             return false;
         }
     }
-
     /**
      * Bulk archive books that are eligible for archiving
      */

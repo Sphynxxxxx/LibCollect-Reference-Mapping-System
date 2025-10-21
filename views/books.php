@@ -971,10 +971,10 @@ include '../includes/header.php';
                                         <?php if (count($book_item['record_ids']) > 1): ?>
                                             <!-- Multiple records - show dropdown -->
                                             <div class="btn-group w-100" role="group">
-                                                <a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
+                                                <!--<a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
                                                 class="btn btn-outline-info btn-sm">
                                                     <i class="fas fa-eye me-1"></i>View
-                                                </a>
+                                                </a>-->
                                                 <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle dropdown-toggle-split" 
                                                         data-bs-toggle="dropdown" aria-expanded="false">
                                                     <span class="visually-hidden">Toggle Dropdown</span>

@@ -15,6 +15,7 @@ $program = $_GET['program'] ?? '';
 $courseCode = $_GET['course_code'] ?? '';
 $yearLevel = $_GET['year_level'] ?? '';
 $semester = $_GET['semester'] ?? '';
+$specializedTrack = $_GET['specialized_track'] ?? '';
 $isCustom = isset($_GET['custom']);
 
 // Get data
@@ -62,6 +63,14 @@ $programNames = [
     'BSED-Math' => 'BACHELOR OF SECONDARY EDUCATION - MATHEMATICS'
 ];
 
+// Map specialized track codes to full names
+$trackNames = [
+    'BUSINESS_ANALYTICS' => 'Business Analytics Track',
+    'SERVICE_MANAGEMENT_BPO' => 'Service Management for Business Process Outsourcing',
+    'ANIMATION' => 'Animation Track',
+    'DATA_SCIENCE' => 'Data Science Track'
+];
+
 // Apply filters to books
 $filteredBooks = $allBooks;
 
@@ -88,12 +97,22 @@ if (!empty($yearLevel)) {
     });
 }
 
-// Filter by semester
+// Filter by semester (only for non-specialized track books)
 if (!empty($semester)) {
     $filteredBooks = array_filter($filteredBooks, function($book) use ($semester) {
+        // Skip books with specialized tracks (they don't have semesters)
+        if (!empty($book['specialized_track'])) return false;
+        
         if (empty($book['semester'])) return false;
         $semesters = array_map('trim', explode(',', $book['semester']));
         return in_array($semester, $semesters);
+    });
+}
+
+// Filter by specialized track
+if (!empty($specializedTrack)) {
+    $filteredBooks = array_filter($filteredBooks, function($book) use ($specializedTrack) {
+        return !empty($book['specialized_track']) && trim($book['specialized_track']) === $specializedTrack;
     });
 }
 
@@ -109,7 +128,7 @@ function getCustomDescription($pdo, $courseCode, $subjectName) {
     }
 }
 
-// Group books by department, program, year level, semester AND by subject
+// Group books by department, program, year level, semester AND specialized track AND by subject
 $departmentData = [];
 foreach ($filteredBooks as $bookItem) {
     $categories = explode(',', $bookItem['category']);
@@ -119,19 +138,22 @@ foreach ($filteredBooks as $bookItem) {
             $bookProgram = trim($bookItem['program'] ?? '');
             $bookYearLevels = !empty($bookItem['year_level']) ? array_map('trim', explode(',', $bookItem['year_level'])) : [''];
             $bookSemesters = !empty($bookItem['semester']) ? array_map('trim', explode(',', $bookItem['semester'])) : [''];
+            $bookSpecializedTrack = trim($bookItem['specialized_track'] ?? '');
             
             // Create entries for each year level and semester combination
             foreach ($bookYearLevels as $yl) {
-                foreach ($bookSemesters as $sem) {
-                    // Create grouping key
-                    $groupKey = $category . '|' . $bookProgram . '|' . $yl . '|' . $sem;
+                // If it's a specialized track, don't iterate semesters
+                if ($yl === 'Specialized Track' && !empty($bookSpecializedTrack)) {
+                    // Use specialized track as the grouping key part
+                    $groupKey = $category . '|' . $bookProgram . '|' . $yl . '|' . $bookSpecializedTrack;
                     
                     if (!isset($departmentData[$groupKey])) {
                         $departmentData[$groupKey] = [
                             'department' => $category,
                             'program' => $bookProgram,
                             'year_level' => $yl,
-                            'semester' => $sem,
+                            'semester' => '', // No semester for specialized tracks
+                            'specialized_track' => $bookSpecializedTrack,
                             'subjects' => []
                         ];
                     }
@@ -140,7 +162,6 @@ foreach ($filteredBooks as $bookItem) {
                     $subjectKey = $bookItem['course_code'] . '|' . $bookItem['subject_name'];
                     
                     if (!isset($departmentData[$groupKey]['subjects'][$subjectKey])) {
-                        // Get custom description from database
                         $customDesc = getCustomDescription($pdo, $bookItem['course_code'], $bookItem['subject_name']);
                         
                         $departmentData[$groupKey]['subjects'][$subjectKey] = [
@@ -153,6 +174,38 @@ foreach ($filteredBooks as $bookItem) {
                     }
                     
                     $departmentData[$groupKey]['subjects'][$subjectKey]['books'][] = $bookItem;
+                } else {
+                    // Regular year level with semesters
+                    foreach ($bookSemesters as $sem) {
+                        $groupKey = $category . '|' . $bookProgram . '|' . $yl . '|' . $sem;
+                        
+                        if (!isset($departmentData[$groupKey])) {
+                            $departmentData[$groupKey] = [
+                                'department' => $category,
+                                'program' => $bookProgram,
+                                'year_level' => $yl,
+                                'semester' => $sem,
+                                'specialized_track' => '',
+                                'subjects' => []
+                            ];
+                        }
+                        
+                        $subjectKey = $bookItem['course_code'] . '|' . $bookItem['subject_name'];
+                        
+                        if (!isset($departmentData[$groupKey]['subjects'][$subjectKey])) {
+                            $customDesc = getCustomDescription($pdo, $bookItem['course_code'], $bookItem['subject_name']);
+                            
+                            $departmentData[$groupKey]['subjects'][$subjectKey] = [
+                                'course_code' => $bookItem['course_code'],
+                                'subject_name' => $bookItem['subject_name'],
+                                'description' => $bookItem['description'] ?? '',
+                                'custom_description' => $customDesc,
+                                'books' => []
+                            ];
+                        }
+                        
+                        $departmentData[$groupKey]['subjects'][$subjectKey]['books'][] = $bookItem;
+                    }
                 }
             }
         }
@@ -167,17 +220,14 @@ $showProgramTitle = false;
 
 // Get dynamic program title - ONLY if specific filters are applied
 if (!empty($filteredBooks) && $department !== 'summary') {
-    // Only show program title if a SPECIFIC program is selected from the dropdown
     if (!empty($program) && isset($programNames[$program])) {
         $dynamicProgramTitle = $programNames[$program];
         $showProgramTitle = true;
     }
-    // Show ONLY department title if specific department selected but NO program filter
     elseif ($department !== 'all' && isset($departments[$department]) && empty($program)) {
         $dynamicProgramTitle = $departments[$department]['full_name'];
         $showProgramTitle = true;
     }
-    // Otherwise don't show any program title
     else {
         $showProgramTitle = false;
         $dynamicProgramTitle = '';
@@ -186,7 +236,7 @@ if (!empty($filteredBooks) && $department !== 'summary') {
 
 if ($department === 'all') {
     $reportData = $departmentData;
-    $showProgramTitle = false; // Don't show for "All Departments"
+    $showProgramTitle = false;
     $dynamicProgramTitle = '';
 } elseif ($department === 'summary') {
     $reportTitle = 'LIBRARY STATISTICS SUMMARY';
@@ -194,12 +244,10 @@ if ($department === 'all') {
     $showProgramTitle = false;
     $dynamicProgramTitle = '';
 } elseif (isset($departments[$department])) {
-    // Filter departmentData for specific department
     $reportData = array_filter($departmentData, function($data) use ($department) {
         return $data['department'] === $department;
     });
     
-    // Only show title if program filter was specifically set
     if (empty($program)) {
         $dynamicProgramTitle = $departments[$department]['full_name'];
         $showProgramTitle = true;
@@ -228,6 +276,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             color: black;
             margin: 0;
             padding: 0;
+            padding-bottom: 0px;
         }
 
         .no-print { 
@@ -377,6 +426,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             margin: 10px 0;
             border: 1px solid black;
             page-break-inside: avoid;
+            margin-bottom: 20px; 
         }
 
         .course-header {
@@ -466,23 +516,6 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             page-break-before: always;
         }
 
-        /* Footer logos */
-        .footer-logos {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            margin-top: 0;
-            text-align: center;
-            padding: 15px 0;
-            background: white;
-        }
-
-        .footer-logos img {
-            height: 25px;
-            margin: 0 10px;
-            opacity: 0.7;
-        }
 
         /* Print button styles */
         .print-controls {
@@ -516,26 +549,32 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             background: #545b62;
         }
 
+        /* Footer logos */
+        .footer-logos {
+            text-align: center;
+            padding: 15px 0;
+            background: white;
+            page-break-inside: avoid;
+            margin-top: 30px;
+        }
 
         .footer-logos img {
             max-width: 800px; 
             width: 100%;
-            max-height: 800px; 
-            height: 100%;
+            max-height: 100px; 
+            height: auto;
             opacity: 0.8;
             object-fit: contain;
         }
 
         @media print {
             .footer-logos {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-            }
-            
-            body {
-                padding-bottom: 100px; 
+                position: relative;
+                margin-top: 30px;
+                page-break-inside: avoid;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                color-adjust: exact;
             }
             
             .footer-logos img {
@@ -543,9 +582,14 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                 print-color-adjust: exact;
                 color-adjust: exact;
                 max-width: 800px;
-                max-height: 800px;
+                max-height: 100px;
+            }
+
+            body {
+                padding-bottom: 0;
             }
         }
+        
     </style>
 </head>
 <body>
@@ -591,18 +635,29 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             <strong>ACADEMIC YEAR <?php echo $academicYear; ?></strong>
         </div>
 
-        <?php if ($department !== 'summary' && $department !== 'all' && (!empty($yearLevel) || !empty($semester))): ?>
+        <?php 
+        // ONLY show semester info if there's a specific filter AND we're not showing program title in sections
+        if ($department !== 'summary' && $department !== 'all' && (!empty($yearLevel) || !empty($semester) || !empty($specializedTrack))): 
+        ?>
         <div class="semester-info">
             <?php 
             $semesterText = '';
-            if (!empty($yearLevel)) {
-                $semesterText .= $yearLevel;
-            }
-            if (!empty($semester)) {
-                if (!empty($yearLevel)) {
-                    $semesterText .= ' - ';
+            
+            // Check if Specialized Track year level is selected
+            if ($yearLevel === 'Specialized Track' && !empty($specializedTrack)) {
+                $trackDisplayName = isset($trackNames[$specializedTrack]) ? $trackNames[$specializedTrack] : str_replace('_', ' ', $specializedTrack);
+                $semesterText = 'FREE ELECTIVE: ' . strtoupper($trackDisplayName);
+            } else {
+                // Regular year level and semester display
+                if (!empty($yearLevel) && $yearLevel !== 'Specialized Track') {
+                    $semesterText .= $yearLevel;
                 }
-                $semesterText .= $semester;
+                if (!empty($semester)) {
+                    if (!empty($yearLevel) && $yearLevel !== 'Specialized Track') {
+                        $semesterText .= ' - ';
+                    }
+                    $semesterText .= $semester;
+                }
             }
             echo $semesterText;
             ?>
@@ -674,19 +729,19 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         </div>
 
     <?php else: ?>
-        <!-- Detailed Department Reports by Program, Year Level, Semester, and Subject -->
+        <!-- Detailed Department Reports by Program, Year Level, Semester/Specialized Track, and Subject -->
         <?php 
         $sectionCounter = 0;
         $currentDepartment = '';
         $currentProgram = '';
-        
+
         foreach ($reportData as $groupKey => $groupData): 
             if (empty($groupData['subjects'])) continue;
             
-            // Show department title when department changes (for "all" departments view)
+            // Show department title when department changes 
             if ($department === 'all' && $currentDepartment !== $groupData['department']) {
                 $currentDepartment = $groupData['department'];
-                $currentProgram = ''; // Reset program when department changes
+                $currentProgram = ''; 
                 if ($sectionCounter > 0) {
                     echo '<div class="page-break"></div>';
                 }
@@ -695,28 +750,47 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                 echo '</div>';
             }
             
-            // Show program title when program changes
+            // This prevents duplication when user filters by specific program
             $programKey = $groupData['department'] . '|' . $groupData['program'];
             if ($currentProgram !== $programKey && !empty($groupData['program']) && isset($programNames[$groupData['program']])) {
                 $currentProgram = $programKey;
-                echo '<div class="section-program-title">';
-                echo $programNames[$groupData['program']];
-                echo '</div>';
-            }
-            
-            // Show year level and semester under the program
-            $yearSemesterText = '';
-            if (!empty($groupData['year_level'])) {
-                $yearSemesterText .= $groupData['year_level'];
-            }
-            if (!empty($groupData['semester'])) {
-                if (!empty($yearSemesterText)) {
-                    $yearSemesterText .= ' - ';
+                
+                // ONLY show if we're NOT already showing it in the header
+                if (empty($program)) {
+                    echo '<div class="section-program-title">';
+                    echo $programNames[$groupData['program']];
+                    echo '</div>';
                 }
-                $yearSemesterText .= $groupData['semester'];
             }
             
-            if (!empty($yearSemesterText)): ?>
+            // Show year level and semester OR specialized track under the program
+            $yearSemesterText = '';
+            
+            // Check if we haven't already displayed this in the top header
+            $showYearSemester = true;
+            if (!empty($yearLevel) || !empty($semester) || !empty($specializedTrack)) {
+                $showYearSemester = false;
+            }
+            
+            // Check if Specialized Track year level
+            if (!empty($groupData['year_level']) && $groupData['year_level'] === 'Specialized Track' && !empty($groupData['specialized_track'])) {
+                $trackDisplayName = isset($trackNames[$groupData['specialized_track']]) ? $trackNames[$groupData['specialized_track']] : str_replace('_', ' ', $groupData['specialized_track']);
+                $yearSemesterText = 'FREE ELECTIVE: ' . strtoupper($trackDisplayName);
+            } else {
+                // Regular year level and semester
+                if (!empty($groupData['year_level']) && $groupData['year_level'] !== 'Specialized Track') {
+                    $yearSemesterText .= $groupData['year_level'];
+                }
+                if (!empty($groupData['semester'])) {
+                    if (!empty($yearSemesterText)) {
+                        $yearSemesterText .= ' - ';
+                    }
+                    $yearSemesterText .= $groupData['semester'];
+                }
+            }
+            
+            // ONLY display year/semester section if not filtered OR if showing "all" departments with multiple programs
+            if (!empty($yearSemesterText) && ($showYearSemester || $department === 'all')): ?>
                 <div class="section-year-semester">
                     <?php echo $yearSemesterText; ?>
                 </div>
@@ -766,7 +840,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                             <?php 
                             $bookNumber = 1;
                             $uniqueBooks = [];
-                            
+
                             foreach ($subjectData['books'] as $bookItem) {
                                 $bookKey = $bookItem['title'] . '|' . $bookItem['author'];
                                 if (!isset($uniqueBooks[$bookKey])) {
@@ -775,11 +849,20 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
                                     $uniqueBooks[$bookKey]['quantity'] += $bookItem['quantity'];
                                 }
                             }
-                            
+
+                            // Sort books by copyright year (newest first)
+                            usort($uniqueBooks, function($a, $b) {
+                                $yearA = $a['publication_year'] ?? date('Y', strtotime($a['created_at'] ?? 'now'));
+                                $yearB = $b['publication_year'] ?? date('Y', strtotime($b['created_at'] ?? 'now'));
+                                
+                                // Sort descending (newest first)
+                                return $yearB - $yearA;
+                            });
+
                             foreach ($uniqueBooks as $bookItem): 
                             ?>
                             <tr>
-                                <td class="call-no"><?php echo !empty($bookItem['isbn']) ? htmlspecialchars($bookItem['isbn']) : str_pad($bookNumber, 3, '0', STR_PAD_LEFT); ?></td>
+                                <td class="call-no"><?php echo !empty($bookItem['isbn']) ? htmlspecialchars($bookItem['isbn']) :str_pad($bookNumber, 3, '0', STR_PAD_LEFT); ?></td>
                                 <td class="title"><?php echo htmlspecialchars($bookItem['title']); ?></td>
                                 <td class="author"><?php echo htmlspecialchars($bookItem['author']); ?></td>
                                 <td class="copyright"><?php echo $bookItem['publication_year'] ?? date('Y', strtotime($bookItem['created_at'])); ?></td>
@@ -809,8 +892,8 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         ?>
     <?php endif; ?>
 
-    <!-- Footer with Partner Logos -->
-    <div class="footer-logos">
+    <!-- Footer with Partner Logos - Only on first page -->
+    <div class="footer-logos first-page-footer">
         <div style="font-size: 8pt; color: #666; margin-bottom: 10px;">
             In partnership with leading educational institutions and organizations
         </div>
@@ -819,10 +902,25 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         </div>
     </div>
 
-    <script>
-        function printReport() {
-            window.print();
+<script>
+    function printReport() {
+        window.print();
+    }
+    
+    // Show footer only on last page
+    window.addEventListener('beforeprint', function() {
+        const footer = document.querySelector('.footer-logos');
+        if (footer) {
+            footer.classList.add('show-on-last');
         }
-    </script>
+    });
+    
+    window.addEventListener('afterprint', function() {
+        const footer = document.querySelector('.footer-logos');
+        if (footer) {
+            footer.classList.remove('show-on-last');
+        }
+    });
+</script>
 </body>
 </html>

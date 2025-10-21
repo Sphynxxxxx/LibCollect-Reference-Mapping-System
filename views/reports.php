@@ -14,35 +14,57 @@ $database = new Database();
 $pdo = $database->connect();
 $book = new Book($pdo);
 
+// Initialize default stats to prevent errors
+$stats = [
+    'total_books' => 0,
+    'total_copies' => 0,
+    'unique_authors' => 0,
+    'unique_categories' => 0,
+    'unique_programs' => 0
+];
+
+$allBooks = [];
+
 // Get report data with proper error handling
 try {
     $stats = $book->getBookStats();
     $allBooks = $book->getAllBooks();
 } catch (Exception $e) {
     // Fallback to direct database queries if Book class methods fail
-    $statsQuery = "SELECT 
-        COUNT(*) as total_books,
-        SUM(quantity) as total_copies,
-        COUNT(DISTINCT author) as unique_authors
-        FROM books";
-    $stmt = $pdo->query($statsQuery);
-    $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+    error_log("Error in reports.php: " . $e->getMessage());
     
-    $allBooksQuery = "SELECT * FROM books ORDER BY created_at DESC";
-    $stmt = $pdo->query($allBooksQuery);
-    $allBooks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $statsQuery = "SELECT 
+            COUNT(*) as total_books,
+            SUM(quantity) as total_copies,
+            COUNT(DISTINCT author) as unique_authors,
+            COUNT(DISTINCT category) as unique_categories,
+            COUNT(DISTINCT program) as unique_programs
+            FROM books";
+        $stmt = $pdo->query($statsQuery);
+        $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        $allBooksQuery = "SELECT * FROM books ORDER BY created_at DESC";
+        $stmt = $pdo->query($allBooksQuery);
+        $allBooks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e2) {
+        error_log("Fallback query also failed: " . $e2->getMessage());
+        // Use default empty values
+    }
 }
 
 // Get all unique courses from the database (combining subject_name and course_code)
-$coursesQuery = "SELECT DISTINCT CONCAT(course_code, ' - ', subject_name) as course_display 
-                 FROM books 
-                 WHERE course_code IS NOT NULL AND course_code != '' 
-                 AND subject_name IS NOT NULL AND subject_name != ''
-                 ORDER BY course_code, subject_name";
+$allCourses = [];
 try {
+    $coursesQuery = "SELECT DISTINCT CONCAT(course_code, ' - ', subject_name) as course_display 
+                     FROM books 
+                     WHERE course_code IS NOT NULL AND course_code != '' 
+                     AND subject_name IS NOT NULL AND subject_name != ''
+                     ORDER BY course_code, subject_name";
     $stmt = $pdo->query($coursesQuery);
     $allCourses = $stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (Exception $e) {
+    error_log("Error getting courses: " . $e->getMessage());
     $allCourses = [];
 }
 
@@ -55,17 +77,21 @@ $departments = [
 ];
 
 // Group books by department - handle multi-context categories
-foreach ($allBooks as $bookItem) {
-    $categories = explode(',', $bookItem['category']);
-    foreach ($categories as $category) {
-        $category = trim($category);
-        if (isset($departments[$category])) {
-            $departments[$category]['books'][] = $bookItem;
+if (is_array($allBooks)) {
+    foreach ($allBooks as $bookItem) {
+        if (isset($bookItem['category'])) {
+            $categories = explode(',', $bookItem['category']);
+            foreach ($categories as $category) {
+                $category = trim($category);
+                if (isset($departments[$category])) {
+                    $departments[$category]['books'][] = $bookItem;
+                }
+            }
         }
     }
 }
 
-// Prepare chart data
+// Prepare chart data with safe defaults
 $chartData = [
     'departments' => [],
     'monthly_additions' => [],
@@ -81,106 +107,104 @@ foreach ($departments as $code => $dept) {
             'BIT' => '#ffc107',
             'EDUCATION' => '#0d6efd',
             'HBM' => '#dc3545',
-            'COMPSTUD' => '#212529'
+            'COMPSTUD' => '#212529',
+            default => '#6c757d'
         }
     ];
 }
 
 // Monthly additions for line chart - using actual database data
-$monthlyQuery = "SELECT 
-    DATE_FORMAT(created_at, '%b %Y') as month,
-    DATE_FORMAT(created_at, '%Y-%m') as sort_key,
-    COUNT(*) as books 
-    FROM books 
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-    ORDER BY sort_key ASC";
-
+$monthlyData = [];
 try {
+    $monthlyQuery = "SELECT 
+        DATE_FORMAT(created_at, '%b %Y') as month,
+        DATE_FORMAT(created_at, '%Y-%m') as sort_key,
+        COUNT(*) as books 
+        FROM books 
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+        GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+        ORDER BY sort_key ASC";
+
     $stmt = $pdo->query($monthlyQuery);
     $monthlyData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    error_log("Error getting monthly data: " . $e->getMessage());
+    $monthlyData = [];
+}
+
+// Fill missing months with 0
+$filledMonthlyData = [];
+for ($i = 11; $i >= 0; $i--) {
+    $month = date('M Y', strtotime("-$i months"));
+    $sortKey = date('Y-m', strtotime("-$i months"));
     
-    // Fill missing months with 0
-    $filledMonthlyData = [];
-    for ($i = 11; $i >= 0; $i--) {
-        $month = date('M Y', strtotime("-$i months"));
-        $sortKey = date('Y-m', strtotime("-$i months"));
-        
-        $found = false;
-        foreach ($monthlyData as $data) {
-            if ($data['sort_key'] === $sortKey) {
-                $filledMonthlyData[] = [
-                    'month' => $month,
-                    'books' => (int)$data['books']
-                ];
-                $found = true;
-                break;
-            }
-        }
-        
-        if (!$found) {
+    $found = false;
+    foreach ($monthlyData as $data) {
+        if ($data['sort_key'] === $sortKey) {
             $filledMonthlyData[] = [
                 'month' => $month,
-                'books' => 0
+                'books' => (int)$data['books']
             ];
+            $found = true;
+            break;
         }
     }
-    $chartData['monthly_additions'] = $filledMonthlyData;
-} catch (Exception $e) {
-    // Fallback to dummy data if query fails
-    $monthlyData = [];
-    for ($i = 11; $i >= 0; $i--) {
-        $month = date('M Y', strtotime("-$i months"));
-        $monthlyData[] = [
+    
+    if (!$found) {
+        $filledMonthlyData[] = [
             'month' => $month,
-            'books' => rand(0, 10)
+            'books' => 0
         ];
     }
-    $chartData['monthly_additions'] = $monthlyData;
 }
+$chartData['monthly_additions'] = $filledMonthlyData;
 
 // Author distribution (top 10 authors) - handle multi-context books properly
-$authorQuery = "SELECT 
-    author, 
-    COUNT(*) as book_count,
-    SUM(quantity) as total_copies
-    FROM books 
-    GROUP BY author 
-    ORDER BY book_count DESC 
-    LIMIT 10";
-
+$authorData = [];
 try {
+    $authorQuery = "SELECT 
+        author, 
+        COUNT(*) as book_count,
+        SUM(quantity) as total_copies
+        FROM books 
+        GROUP BY author 
+        ORDER BY book_count DESC 
+        LIMIT 10";
+
     $stmt = $pdo->query($authorQuery);
     $authorData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $chartData['author_distribution'] = $authorData;
 } catch (Exception $e) {
-    $chartData['author_distribution'] = [];
+    error_log("Error getting author data: " . $e->getMessage());
+    $authorData = [];
 }
+$chartData['author_distribution'] = $authorData;
 
-// Get additional statistics
-$additionalStats = [];
+// Get additional statistics with error handling
+$additionalStats = [
+    'archived_books' => 0,
+    'recent_additions' => 0,
+    'multi_context' => 0
+];
+
 try {
     // Get archived books count
     $archivedQuery = "SELECT COUNT(*) as archived_books FROM archived_books";
     $stmt = $pdo->query($archivedQuery);
-    $additionalStats['archived_books'] = $stmt->fetchColumn();
+    $additionalStats['archived_books'] = $stmt->fetchColumn() ?: 0;
     
     // Get recent additions (last 30 days)
     $recentQuery = "SELECT COUNT(*) as recent_additions FROM books WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
     $stmt = $pdo->query($recentQuery);
-    $additionalStats['recent_additions'] = $stmt->fetchColumn();
+    $additionalStats['recent_additions'] = $stmt->fetchColumn() ?: 0;
     
     // Get multi-context books count
     $multiContextQuery = "SELECT COUNT(*) as multi_context FROM books WHERE is_multi_context = 1";
     $stmt = $pdo->query($multiContextQuery);
-    $additionalStats['multi_context'] = $stmt->fetchColumn();
+    $additionalStats['multi_context'] = $stmt->fetchColumn() ?: 0;
     
 } catch (Exception $e) {
-    $additionalStats = [
-        'archived_books' => 0,
-        'recent_additions' => 0,
-        'multi_context' => 0
-    ];
+    error_log("Error getting additional stats: " . $e->getMessage());
+    // Use default values already set
 }
 
 // Handle print requests

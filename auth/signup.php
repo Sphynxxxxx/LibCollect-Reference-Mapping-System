@@ -166,7 +166,7 @@ if ($_POST) {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(180deg, #001f75, 0%, #1e40af 100%);
+            background: #1e40af;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -225,7 +225,7 @@ if ($_POST) {
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, #ffd700 0%, #ffb347 100%);
+            background: #ffb347;
             border: none;
             border-radius: 10px;
             padding: 12px 30px;
@@ -245,12 +245,12 @@ if ($_POST) {
         }
         
         .alert-danger {
-            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+            background: #ee5a52;
             color: white;
         }
         
         .alert-success {
-            background: linear-gradient(45deg, #51cf66, #40c057);
+            background: #40c057;
             color: white;
         }
         
