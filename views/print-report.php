@@ -277,6 +277,7 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             margin: 0;
             padding: 0;
             padding-bottom: 0px;
+            position: relative;
         }
 
         .no-print { 
@@ -516,7 +517,6 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             page-break-before: always;
         }
 
-
         /* Print button styles */
         .print-controls {
             background: white;
@@ -549,47 +549,63 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
             background: #545b62;
         }
 
-        /* Footer logos */
+        /* Footer logos - Updated for first page only */
         .footer-logos {
             text-align: center;
             padding: 15px 0;
             background: white;
-            page-break-inside: avoid;
-            margin-top: 30px;
-        }
-
-        .footer-logos img {
-            max-width: 800px; 
             width: 100%;
-            max-height: 100px; 
-            height: auto;
-            opacity: 0.8;
-            object-fit: contain;
+            position: fixed;
+            bottom: 0;
+            left: 0;
         }
 
         @media print {
+            @page {
+                margin-bottom: 120px;
+            }
+
+            @page :first {
+                @bottom-center {
+                    content: element(footer);
+                }
+            }
+
+            /* Hide all footer logos by default */
             .footer-logos {
-                position: relative;
-                margin-top: 30px;
+                display: none !important;
+            }
+            
+            /* Show only the first footer (marked with data-footer-position="1") */
+            .footer-logos[data-footer-position="1"] {
+                display: block !important;
+                position: running(footer);
+                text-align: center;
+                padding: 15px 0;
+                background: white;
                 page-break-inside: avoid;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
                 color-adjust: exact;
             }
             
-            .footer-logos img {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-                color-adjust: exact;
+            .footer-logos[data-footer-position="1"] img {
                 max-width: 800px;
                 max-height: 100px;
-            }
-
-            body {
-                padding-bottom: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
         }
-        
+
+        @media screen {
+            .footer-logos {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                background: white;
+            }
+        }
     </style>
 </head>
 <body>
@@ -892,8 +908,8 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
         ?>
     <?php endif; ?>
 
-    <!-- Footer with Partner Logos - Only on first page -->
-    <div class="footer-logos first-page-footer">
+    <!-- Footer with Partner Logos - Now only appears on first page when printing -->
+    <div class="footer-logos" data-footer-position="1" style="page-break-after: avoid; page-break-inside: avoid;">
         <div style="font-size: 8pt; color: #666; margin-bottom: 10px;">
             In partnership with leading educational institutions and organizations
         </div>
@@ -906,20 +922,36 @@ $academicYear = $currentYear . '-' . ($currentYear + 1);
     function printReport() {
         window.print();
     }
-    
-    // Show footer only on last page
-    window.addEventListener('beforeprint', function() {
+
+    // Ensure footer only appears on first page by moving it after header
+    document.addEventListener('DOMContentLoaded', function() {
         const footer = document.querySelector('.footer-logos');
-        if (footer) {
-            footer.classList.add('show-on-last');
+        const header = document.querySelector('.document-header');
+        
+        if (footer && header && window.matchMedia('print').matches === false) {
+            // On screen view, footer stays at bottom (normal behavior)
         }
-    });
-    
-    window.addEventListener('afterprint', function() {
-        const footer = document.querySelector('.footer-logos');
-        if (footer) {
-            footer.classList.remove('show-on-last');
-        }
+        
+        // Before printing, move footer right after header
+        window.addEventListener('beforeprint', function() {
+            const footer = document.querySelector('.footer-logos');
+            const header = document.querySelector('.document-header');
+            
+            if (footer && header) {
+                // Insert footer right after header
+                header.parentNode.insertBefore(footer, header.nextSibling);
+            }
+        });
+        
+        // After printing, move footer back to bottom (optional, for UI consistency)
+        window.addEventListener('afterprint', function() {
+            const footer = document.querySelector('.footer-logos');
+            const body = document.querySelector('body');
+            
+            if (footer && body) {
+                body.appendChild(footer);
+            }
+        });
     });
 </script>
 </body>
