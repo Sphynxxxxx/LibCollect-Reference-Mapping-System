@@ -219,15 +219,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $pendingBook = $stmt->fetch(PDO::FETCH_ASSOC);
                         
                         if ($pendingBook) {
-                            // Prepare data for adding back to active collection
+                            // Prepare data for adding back to active collection WITH BYPASS FLAG
                             $restoreData = [
                                 'title' => $pendingBook['title'],
                                 'author' => $pendingBook['author'],
                                 'isbn' => $pendingBook['isbn'],
                                 'category' => $pendingBook['category'],
-                                'program' => $pendingBook['program'],
+                                'program' => $pendingBook['program'] ?? null,
                                 'specialized_track' => $pendingBook['specialized_track'] ?? null,
                                 'quantity' => $pendingBook['quantity'],
+                                'description' => $pendingBook['description'] ?? null,
                                 'subject_name' => $pendingBook['subject_name'],
                                 'semester' => $pendingBook['semester'],
                                 'year_level' => $pendingBook['year_level'],
@@ -236,7 +237,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 'book_copy_number' => $pendingBook['book_copy_number'],
                                 'total_quantity' => $pendingBook['total_quantity'],
                                 'is_multi_context' => $pendingBook['is_multi_context'],
-                                'same_book_series' => $pendingBook['same_book_series']
+                                'same_book_series' => $pendingBook['same_book_series'],
+                                'bypass_archive_check' => true // Add this flag to prevent immediate re-archiving
                             ];
                             
                             // Add back to active books collection
@@ -245,11 +247,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             if ($result && $result !== 'archived') {
                                 // Remove from pending archives
                                 $stmt = $pdo->prepare("DELETE FROM pending_archives WHERE id = ?");
-                                $stmt->execute([$pendingId]);
-                                $restoredCount++;
+                                if ($stmt->execute([$pendingId])) {
+                                    $restoredCount++;
+                                } else {
+                                    $errorCount++;
+                                }
                             } else {
                                 $errorCount++;
                             }
+                        } else {
+                            $errorCount++;
                         }
                     }
                     
@@ -260,9 +267,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             $_SESSION['message'] .= " ({$errorCount} failed)";
                         }
                     } else {
-                        $_SESSION['message'] = 'Failed to restore books!';
+                        $_SESSION['message'] = 'Failed to restore any books! They might be immediately archived again due to age.';
                         $_SESSION['message_type'] = 'danger';
                     }
+                } else {
+                    $_SESSION['message'] = 'No book IDs provided for restoration!';
+                    $_SESSION['message_type'] = 'danger';
                 }
                 break;
                 

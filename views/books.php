@@ -7,6 +7,34 @@ $database = new Database();
 $pdo = $database->connect();
 $book = new Book($pdo);
 
+// Function to verify pending_archives table structure
+function verifyPendingArchivesTable($pdo) {
+    try {
+        $stmt = $pdo->query("DESCRIBE pending_archives");
+        $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        error_log("Pending archives table columns: " . implode(', ', $columns));
+        
+        $required_columns = [
+            'title', 'author', 'isbn', 'category', 'quantity', 'program',
+            'pending_since'
+        ];
+        
+        $missing_columns = array_diff($required_columns, $columns);
+        if (!empty($missing_columns)) {
+            error_log("Missing columns in pending_archives: " . implode(', ', $missing_columns));
+            return false;
+        }
+        
+        return true;
+    } catch (PDOException $e) {
+        error_log("Error checking pending_archives table: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Verify table structure
+verifyPendingArchivesTable($pdo);
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
@@ -39,120 +67,239 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 break;
                 
             case 'send_to_pending':
-                // Move book to pending archives
+                // Move book to pending archives - ENHANCED VERSION
                 if (isset($_POST['id'])) {
+                    $id = trim($_POST['id']);
+                    error_log("Processing single book archive for ID: $id");
+                    
                     // Get book data
                     $stmt = $pdo->prepare("SELECT * FROM books WHERE id = ?");
-                    $stmt->execute([$_POST['id']]);
+                    $stmt->execute([$id]);
                     $bookData = $stmt->fetch(PDO::FETCH_ASSOC);
                     
                     if ($bookData) {
+                        // Validate required fields
+                        if (empty($bookData['title']) || empty($bookData['author'])) {
+                            error_log("Book ID $id missing required fields");
+                            $_SESSION['message'] = 'Cannot archive book: Missing title or author!';
+                            $_SESSION['message_type'] = 'danger';
+                            header('Location: books.php');
+                            exit;
+                        }
+                        
                         try {
+                            // Check for duplicates in pending_archives
+                            $checkStmt = $pdo->prepare("SELECT id FROM pending_archives WHERE title = ? AND author = ? AND isbn = ?");
+                            $checkStmt->execute([
+                                $bookData['title'],
+                                $bookData['author'],
+                                $bookData['isbn'] ?? ''
+                            ]);
+                            
+                            if ($checkStmt->fetch()) {
+                                error_log("Book already exists in pending archives, proceeding with deletion only");
+                            }
+                            
                             // Insert into pending_archives
-                            $sql = "INSERT INTO pending_archives (title, author, isbn, category, quantity, description, 
-                                    subject_name, semester, section, year_level, course_code, publication_year, 
-                                    book_copy_number, total_quantity, is_multi_context, same_book_series) 
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                            $sql = "INSERT INTO pending_archives (
+                                title, author, isbn, category, quantity, 
+                                subject_name, semester,  year_level, course_code, publication_year, 
+                                book_copy_number, total_quantity, is_multi_context, same_book_series, program,
+                                pending_since
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
                             
                             $stmt = $pdo->prepare($sql);
                             $result = $stmt->execute([
                                 $bookData['title'],
                                 $bookData['author'],
-                                $bookData['isbn'],
-                                $bookData['category'],
-                                $bookData['quantity'],
-                                $bookData['description'],
-                                $bookData['subject_name'],
-                                $bookData['semester'],
-                                $bookData['section'],
-                                $bookData['year_level'],
-                                $bookData['course_code'],
-                                $bookData['publication_year'],
+                                $bookData['isbn'] ?? '',
+                                $bookData['category'] ?? '',
+                                $bookData['quantity'] ?? 1,
+                                $bookData['subject_name'] ?? '',
+                                $bookData['semester'] ?? '',
+                                $bookData['year_level'] ?? '',
+                                $bookData['course_code'] ?? '',
+                                $bookData['publication_year'] ?? '',
                                 $bookData['book_copy_number'] ?? 1,
                                 $bookData['total_quantity'] ?? 1,
                                 $bookData['is_multi_context'] ?? 0,
                                 $bookData['same_book_series'] ?? 0,
-                                $bookData['program'] ?? '' 
-
+                                $bookData['program'] ?? ''
                             ]);
                             
                             if ($result) {
-                                // Delete from books table
-                                $book->deleteBook($_POST['id']);
+                                error_log("Successfully inserted book into pending_archives");
                                 
-                                $_SESSION['message'] = 'Book sent to Pending Archives! Visit Archives page to select archive reason.';
-                                $_SESSION['message_type'] = 'info';
+                                // Delete from books table
+                                $deleteStmt = $pdo->prepare("DELETE FROM books WHERE id = ?");
+                                if ($deleteStmt->execute([$id])) {
+                                    $_SESSION['message'] = 'Book sent to Pending Archives! Visit Archives page to select archive reason.';
+                                    $_SESSION['message_type'] = 'info';
+                                    error_log("Successfully archived book ID $id");
+                                } else {
+                                    $_SESSION['message'] = 'Book added to pending but failed to remove from active collection!';
+                                    $_SESSION['message_type'] = 'warning';
+                                    error_log("Failed to delete book ID $id from books table");
+                                }
                             } else {
-                                $_SESSION['message'] = 'Failed to move book to pending archives!';
+                                $errorInfo = $stmt->errorInfo();
+                                error_log("Failed to insert into pending_archives: " . print_r($errorInfo, true));
+                                $_SESSION['message'] = 'Failed to move book to pending archives! Database error.';
                                 $_SESSION['message_type'] = 'danger';
                             }
                         } catch (PDOException $e) {
-                            error_log("Error moving to pending archives: " . $e->getMessage());
-                            $_SESSION['message'] = 'Failed to move book to pending archives!';
+                            error_log("Database error in send_to_pending: " . $e->getMessage());
+                            $_SESSION['message'] = 'Failed to move book to pending archives! Database error: ' . $e->getMessage();
                             $_SESSION['message_type'] = 'danger';
                         }
+                    } else {
+                        error_log("Book ID $id not found in database");
+                        $_SESSION['message'] = 'Book not found!';
+                        $_SESSION['message_type'] = 'danger';
                     }
+                } else {
+                    error_log("No book ID provided for archiving");
+                    $_SESSION['message'] = 'No book ID provided!';
+                    $_SESSION['message_type'] = 'danger';
                 }
                 break;
                 
             case 'send_multiple_to_pending':
-                // Move multiple books to pending archives
+                // Move multiple books to pending archives - ENHANCED VERSION
                 $archived_count = 0;
+                $error_count = 0;
+                $error_details = [];
+                
                 if (isset($_POST['ids']) && is_array($_POST['ids'])) {
-                    foreach ($_POST['ids'] as $id) {
+                    error_log("Processing " . count($_POST['ids']) . " books for archiving");
+                    
+                    foreach ($_POST['ids'] as $index => $id) {
+                        $id = trim($id);
+                        if (empty($id)) {
+                            error_log("Skipping empty ID at index $index");
+                            continue;
+                        }
+                        
+                        error_log("Processing book ID: $id");
+                        
                         // Get book data
                         $stmt = $pdo->prepare("SELECT * FROM books WHERE id = ?");
                         $stmt->execute([$id]);
                         $bookData = $stmt->fetch(PDO::FETCH_ASSOC);
                         
-                        if ($bookData) {
-                            try {
-                                // Insert into pending_archives
-                                $sql = "INSERT INTO pending_archives (title, author, isbn, category, quantity, description, 
-                                        subject_name, semester, section, year_level, course_code, publication_year, 
-                                        book_copy_number, total_quantity, is_multi_context, same_book_series, program) 
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                                
-                                $stmt = $pdo->prepare($sql);
-                                $result = $stmt->execute([
-                                    $bookData['title'],
-                                    $bookData['author'],
-                                    $bookData['isbn'],
-                                    $bookData['category'],
-                                    $bookData['quantity'],
-                                    $bookData['description'],
-                                    $bookData['subject_name'],
-                                    $bookData['semester'],
-                                    $bookData['section'],
-                                    $bookData['year_level'],
-                                    $bookData['course_code'],
-                                    $bookData['publication_year'],
-                                    $bookData['book_copy_number'] ?? 1,
-                                    $bookData['total_quantity'] ?? 1,
-                                    $bookData['is_multi_context'] ?? 0,
-                                    $bookData['same_book_series'] ?? 0,
-                                    $bookData['program'] ?? ''  
-                                ]);
-                                
-                                if ($result) {
-                                    // Delete from books table
-                                    $book->deleteBook($id);
-                                    $archived_count++;
-                                }
-                            } catch (PDOException $e) {
-                                error_log("Error moving to pending archives: " . $e->getMessage());
+                        if (!$bookData) {
+                            error_log("Book ID $id not found in database");
+                            $error_count++;
+                            $error_details[] = "Book ID $id not found";
+                            continue;
+                        }
+                        
+                        // Validate required fields
+                        if (empty($bookData['title']) || empty($bookData['author'])) {
+                            error_log("Book ID $id missing required fields (title or author)");
+                            $error_count++;
+                            $error_details[] = "Book '{$bookData['title']}' missing required data";
+                            continue;
+                        }
+                        
+                        try {
+                            // Check if book already exists in pending_archives (avoid duplicates)
+                            $checkStmt = $pdo->prepare("SELECT id FROM pending_archives WHERE title = ? AND author = ? AND isbn = ?");
+                            $checkStmt->execute([
+                                $bookData['title'],
+                                $bookData['author'],
+                                $bookData['isbn'] ?? ''
+                            ]);
+                            
+                            if ($checkStmt->fetch()) {
+                                error_log("Book '{$bookData['title']}' already exists in pending archives");
+                                // Still proceed to delete from active collection
                             }
+                            
+                            // Insert into pending_archives - FIXED with all fields
+                            $sql = "INSERT INTO pending_archives (
+                                title, author, isbn, category, quantity,  
+                                subject_name, semester, year_level, course_code, publication_year, 
+                                book_copy_number, total_quantity, is_multi_context, same_book_series, program,
+                                pending_since
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                            
+                            $stmt = $pdo->prepare($sql);
+                            $result = $stmt->execute([
+                                $bookData['title'] ?? '',
+                                $bookData['author'] ?? '',
+                                $bookData['isbn'] ?? '',
+                                $bookData['category'] ?? '',
+                                $bookData['quantity'] ?? 1,
+                                $bookData['subject_name'] ?? '',
+                                $bookData['semester'] ?? '',
+                                $bookData['year_level'] ?? '',
+                                $bookData['course_code'] ?? '',
+                                $bookData['publication_year'] ?? '',
+                                $bookData['book_copy_number'] ?? 1,
+                                $bookData['total_quantity'] ?? 1,
+                                $bookData['is_multi_context'] ?? 0,
+                                $bookData['same_book_series'] ?? 0,
+                                $bookData['program'] ?? ''
+                            ]);
+                            
+                            if ($result) {
+                                error_log("Successfully inserted book ID $id into pending_archives");
+                                
+                                // Delete from books table
+                                $deleteStmt = $pdo->prepare("DELETE FROM books WHERE id = ?");
+                                $deleteResult = $deleteStmt->execute([$id]);
+                                
+                                if ($deleteResult) {
+                                    $archived_count++;
+                                    error_log("Successfully deleted book ID $id from books table");
+                                } else {
+                                    error_log("Failed to delete book ID $id from books table");
+                                    $error_count++;
+                                    $error_details[] = "Failed to remove '{$bookData['title']}' from active collection";
+                                }
+                            } else {
+                                error_log("Failed to insert book ID $id into pending_archives");
+                                $error_count++;
+                                $error_details[] = "Failed to archive '{$bookData['title']}'";
+                            }
+                            
+                        } catch (PDOException $e) {
+                            error_log("Database error for book ID $id: " . $e->getMessage());
+                            $error_count++;
+                            $error_details[] = "Database error for '{$bookData['title']}': " . $e->getMessage();
                         }
                     }
+                } else {
+                    error_log("No IDs received in send_multiple_to_pending");
+                    $_SESSION['message'] = 'No book IDs provided for archiving!';
+                    $_SESSION['message_type'] = 'danger';
+                    header('Location: books.php');
+                    exit;
                 }
                 
+                // Prepare result message
                 if ($archived_count > 0) {
-                    $_SESSION['message'] = "Successfully sent {$archived_count} book(s) to Pending Archives! Visit Archives page to select archive reasons.";
-                    $_SESSION['message_type'] = 'info';
+                    $message = "Successfully sent {$archived_count} book(s) to Pending Archives!";
+                    if ($error_count > 0) {
+                        $message .= " ({$error_count} failed)";
+                        $_SESSION['message_type'] = 'warning';
+                    } else {
+                        $_SESSION['message_type'] = 'info';
+                    }
+                    $_SESSION['message'] = $message;
+                    
+                    // Log detailed errors if any
+                    if ($error_count > 0) {
+                        error_log("Archive errors: " . implode(', ', $error_details));
+                    }
                 } else {
-                    $_SESSION['message'] = 'Failed to move books to pending archives!';
+                    $_SESSION['message'] = 'Failed to move books to pending archives! ' . 
+                                          ($error_details ? implode(', ', array_slice($error_details, 0, 3)) : 'Check error logs for details.');
                     $_SESSION['message_type'] = 'danger';
                 }
+                
+                error_log("Archive operation completed: $archived_count success, $error_count errors");
                 break;
         }
         header('Location: books.php');
@@ -792,8 +939,6 @@ include '../includes/header.php';
                                         <i class="fas fa-book"></i>
                                     </div>
                                     
-                                    
-                                    
                                     <!-- Merged book indicator -->
                                     <?php if (count($book_item['academic_contexts']) > 1): ?>
                                         <div class="merged-indicator">
@@ -971,13 +1116,9 @@ include '../includes/header.php';
                                         <?php if (count($book_item['record_ids']) > 1): ?>
                                             <!-- Multiple records - show dropdown -->
                                             <div class="btn-group w-100" role="group">
-                                                <!--<a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
-                                                class="btn btn-outline-info btn-sm">
-                                                    <i class="fas fa-eye me-1"></i>View
-                                                </a>-->
-                                                <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle dropdown-toggle-split" 
+                                                <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" 
                                                         data-bs-toggle="dropdown" aria-expanded="false">
-                                                    <span class="visually-hidden">Toggle Dropdown</span>
+                                                    <i class="fas fa-cog me-1"></i>Manage Records
                                                 </button>
                                                 <ul class="dropdown-menu">
                                                     <li><h6 class="dropdown-header">Manage Records</h6></li>
@@ -995,21 +1136,17 @@ include '../includes/header.php';
                                                             <i class="fas fa-archive me-2"></i>Archive All Records
                                                         </a>
                                                     </li>
-                                                    <li>
+                                                    <!--<li>
                                                         <a class="dropdown-item text-danger" href="#" 
                                                         onclick="event.preventDefault(); confirmDeleteAll([<?php echo implode(',', $book_item['record_ids']); ?>], '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
                                                             <i class="fas fa-trash me-2"></i>Delete All Records
                                                         </a>
-                                                    </li>
+                                                    </li>-->
                                                 </ul>
                                             </div>
                                         <?php else: ?>
                                             <!-- Single record - regular buttons -->
                                             <div class="d-grid gap-1">
-                                                <!--<a href="view-book.php?id=<?php echo $book_item['id']; ?>" 
-                                                class="btn btn-outline-info btn-sm">
-                                                    <i class="fas fa-eye me-1"></i>View Details
-                                                </a>-->
                                                 <a href="edit-book.php?id=<?php echo $book_item['id']; ?>" 
                                                 class="btn btn-outline-primary btn-sm">
                                                     <i class="fas fa-edit me-1"></i>Edit
@@ -1019,11 +1156,11 @@ include '../includes/header.php';
                                                         onclick="confirmArchive(<?php echo $book_item['id']; ?>, '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
                                                     <i class="fas fa-archive me-1"></i>Archive
                                                 </button>
-                                                <button type="button" 
+                                                <!--<button type="button" 
                                                         class="btn btn-outline-danger btn-sm" 
                                                         onclick="confirmDelete(<?php echo $book_item['id']; ?>, '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>', deleteBook)">
                                                     <i class="fas fa-trash me-1"></i>Delete
-                                                </button>
+                                                </button>-->
                                             </div>
                                         <?php endif; ?>
                                     </div>
@@ -1131,6 +1268,8 @@ function confirmArchive(id, title) {
 }
 
 function confirmArchiveAll(ids, title) {
+    console.log("Confirm Archive All - IDs:", ids, "Title:", title);
+    
     if (confirm(`Are you sure you want to send all ${ids.length} records of "${title}" to Pending Archives?\n\nYou'll need to select archive reasons in the Archives page.`)) {
         archiveMultipleBooks(ids);
     }
@@ -1176,6 +1315,13 @@ function deleteMultipleBooks(ids) {
 }
 
 function archiveMultipleBooks(ids) {
+    console.log("Archive Multiple Books called with IDs:", ids);
+    
+    // Show loading state
+    const originalText = event.target.innerHTML;
+    event.target.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Archiving...';
+    event.target.disabled = true;
+    
     // Create a form to archive multiple books
     const form = document.createElement('form');
     form.method = 'POST';
@@ -1187,7 +1333,15 @@ function archiveMultipleBooks(ids) {
     
     form.innerHTML = inputs;
     document.body.appendChild(form);
+    
+    console.log("Submitting archive form...");
     form.submit();
+    
+    // Re-enable button after 5 seconds in case of failure
+    setTimeout(() => {
+        event.target.innerHTML = originalText;
+        event.target.disabled = false;
+    }, 5000);
 }
 
 // Add smooth scrolling and animations
