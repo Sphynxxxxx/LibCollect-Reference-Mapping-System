@@ -1283,7 +1283,6 @@ include '../includes/header.php';
                                                                 <a class="dropdown-item" href="#" 
                                                                 onclick="event.preventDefault(); event.stopPropagation(); restorePendingBook(<?php echo $recordId; ?>, '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
                                                                     <i class="fas fa-undo me-2 text-success"></i>Restore Record #<?php echo $recordId; ?>
-                                                                    <small class="text-muted">(Copy <?php echo ($index + 1); ?> of <?php echo count($book['record_ids']); ?>)</small>
                                                                 </a>
                                                             </li>
                                                         <?php endforeach; ?>

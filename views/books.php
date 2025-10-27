@@ -1133,11 +1133,14 @@ include '../includes/header.php';
                                                         <li>
                                                             <a class="dropdown-item" href="edit-book.php?id=<?php echo $recordId; ?>">
                                                                 <i class="fas fa-edit me-2 text-primary"></i>Edit Record #<?php echo $recordId; ?>
+                                                                <?php if (count($book_item['record_ids']) > 1): ?>
+                                                                    <small class="text-muted">(Copy <?php echo ($index + 1); ?> of <?php echo count($book_item['record_ids']); ?>)</small>
+                                                                <?php endif; ?>
                                                             </a>
                                                         </li>
                                                     <?php endforeach; ?>
                                                     <li><hr class="dropdown-divider"></li>
-                                                    <li class="sticky-bottom bg-white">
+                                                    <li>
                                                         <a class="dropdown-item text-warning fw-bold" href="#" 
                                                         onclick="event.preventDefault(); confirmArchiveAll([<?php echo implode(',', $book_item['record_ids']); ?>], '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
                                                             <i class="fas fa-archive me-2"></i>Archive All <?php echo count($book_item['record_ids']); ?> Records
