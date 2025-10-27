@@ -1112,36 +1112,37 @@ include '../includes/header.php';
                                     <?php endif; ?>
                                     
                                     <!-- Enhanced Action Buttons with Dropdown for Multiple Records -->
+                                    <!-- Enhanced Action Buttons with Dropdown for Multiple Records -->
                                     <div class="mt-auto book-actions">
                                         <?php if (count($book_item['record_ids']) > 1): ?>
                                             <!-- Multiple records - show dropdown -->
                                             <div class="btn-group w-100" role="group">
-                                                <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" 
-                                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                                    <i class="fas fa-cog me-1"></i>Manage Records
+                                                <button type="button" 
+                                                        class="btn btn-outline-primary btn-sm dropdown-toggle" 
+                                                        data-bs-toggle="dropdown" 
+                                                        aria-expanded="false"
+                                                        data-bs-auto-close="outside">
+                                                    <i class="fas fa-cog me-1"></i>Manage Records (<?php echo count($book_item['record_ids']); ?>)
                                                 </button>
-                                                <ul class="dropdown-menu">
-                                                    <li><h6 class="dropdown-header">Manage Records</h6></li>
+                                                <ul class="dropdown-menu dropdown-menu-scrollable" style="max-height: 400px; overflow-y: auto;">
+                                                    <li><h6 class="dropdown-header sticky-top bg-white border-bottom">
+                                                        <i class="fas fa-list me-1"></i>Manage Records (<?php echo count($book_item['record_ids']); ?> total)
+                                                    </h6></li>
+                                                    <li><hr class="dropdown-divider mt-0"></li>
                                                     <?php foreach ($book_item['record_ids'] as $index => $recordId): ?>
                                                         <li>
                                                             <a class="dropdown-item" href="edit-book.php?id=<?php echo $recordId; ?>">
-                                                                <i class="fas fa-edit me-2"></i>Edit Record #<?php echo $recordId; ?>
+                                                                <i class="fas fa-edit me-2 text-primary"></i>Edit Record #<?php echo $recordId; ?>
                                                             </a>
                                                         </li>
                                                     <?php endforeach; ?>
                                                     <li><hr class="dropdown-divider"></li>
-                                                    <li>
-                                                        <a class="dropdown-item text-warning" href="#" 
+                                                    <li class="sticky-bottom bg-white">
+                                                        <a class="dropdown-item text-warning fw-bold" href="#" 
                                                         onclick="event.preventDefault(); confirmArchiveAll([<?php echo implode(',', $book_item['record_ids']); ?>], '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
-                                                            <i class="fas fa-archive me-2"></i>Archive All Records
+                                                            <i class="fas fa-archive me-2"></i>Archive All <?php echo count($book_item['record_ids']); ?> Records
                                                         </a>
                                                     </li>
-                                                    <!--<li>
-                                                        <a class="dropdown-item text-danger" href="#" 
-                                                        onclick="event.preventDefault(); confirmDeleteAll([<?php echo implode(',', $book_item['record_ids']); ?>], '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
-                                                            <i class="fas fa-trash me-2"></i>Delete All Records
-                                                        </a>
-                                                    </li>-->
                                                 </ul>
                                             </div>
                                         <?php else: ?>
@@ -1156,11 +1157,6 @@ include '../includes/header.php';
                                                         onclick="confirmArchive(<?php echo $book_item['id']; ?>, '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>')">
                                                     <i class="fas fa-archive me-1"></i>Archive
                                                 </button>
-                                                <!--<button type="button" 
-                                                        class="btn btn-outline-danger btn-sm" 
-                                                        onclick="confirmDelete(<?php echo $book_item['id']; ?>, '<?php echo htmlspecialchars($book_item['title'], ENT_QUOTES); ?>', deleteBook)">
-                                                    <i class="fas fa-trash me-1"></i>Delete
-                                                </button>-->
                                             </div>
                                         <?php endif; ?>
                                     </div>
@@ -1394,6 +1390,55 @@ style.textContent = `
     .academic-contexts {
         scrollbar-width: thin;
         scrollbar-color: #888 #f1f1f1;
+    }
+    
+    /* Scrollable dropdown for 20+ records */
+    .dropdown-menu-scrollable {
+        max-height: 400px !important;
+        overflow-y: auto !important;
+    }
+    
+    /* Custom scrollbar for dropdown */
+    .dropdown-menu-scrollable {
+        scrollbar-width: thin;
+        scrollbar-color: #888 #f1f1f1;
+    }
+    
+    .dropdown-menu-scrollable::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .dropdown-menu-scrollable::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .dropdown-menu-scrollable::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    .dropdown-menu-scrollable::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+    
+    /* Sticky header and footer for dropdown */
+    .dropdown-menu .sticky-top {
+        position: sticky;
+        top: 0;
+        z-index: 1020;
+    }
+    
+    .dropdown-menu .sticky-bottom {
+        position: sticky;
+        bottom: 0;
+        z-index: 1020;
+    }
+    
+    /* Ensure dropdown doesn't close when scrolling */
+    .dropdown-menu-scrollable .dropdown-item {
+        white-space: normal;
+        word-wrap: break-word;
     }
 `;
 document.head.appendChild(style);

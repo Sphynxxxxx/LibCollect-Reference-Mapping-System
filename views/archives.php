@@ -771,6 +771,7 @@ include '../includes/header.php';
     display: flex;
     flex-direction: column;
     height: calc(100% - 180px);
+    gap: 0.5rem;
 }
 
 .book-title {
@@ -788,13 +789,17 @@ include '../includes/header.php';
 .book-author, .book-isbn {
     font-size: 0.9rem;
     font-weight: 500;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
 }
 
 .book-year {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
     font-size: 0.85rem;
     font-weight: 500;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
 }
 
 .academic-contexts {
@@ -858,14 +863,20 @@ include '../includes/header.php';
 .pending-info {
     background: #fff3cd;
     border-radius: 8px;
-    padding: 0.5rem;
-    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
     font-size: 0.8rem;
     border: 1px solid #ffc107;
 }
 
+.pending-info small {
+    display: block;
+    margin-top: 0.5rem;
+}
+
 .book-actions {
     margin-top: auto;
+    padding-top: 0.5rem;
 }
 
 .book-actions .btn-group {
@@ -874,6 +885,26 @@ include '../includes/header.php';
 
 .book-actions .dropdown-menu {
     width: 100%;
+}
+
+/* Scrollable dropdown for 20+ records - inline styles */
+.dropdown-menu-scrollable {
+    max-height: 400px !important;
+    overflow-y: auto !important;
+}
+
+.dropdown-menu .sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    margin: 0;
+}
+
+.dropdown-menu .sticky-bottom {
+    position: sticky;
+    bottom: 0;
+    z-index: 1020;
+    margin: 0;
 }
 
 /* Different gradients for different departments */
@@ -929,9 +960,11 @@ include '../includes/header.php';
 }
 
 .book-age {
-    font-size: 0.8rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: 8px;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 6px;
+    white-space: nowrap;
+    display: inline-block;
 }
 
 .age-ancient { background-color: #dc3545; color: white; }
@@ -1236,30 +1269,35 @@ include '../includes/header.php';
                                                     </button>
                                                     <button type="button" class="btn btn-warning btn-sm dropdown-toggle dropdown-toggle-split" 
                                                             data-bs-toggle="dropdown" aria-expanded="false"
+                                                            data-bs-auto-close="outside"
                                                             onclick="event.stopPropagation();">
-                                                        <span class="visually-hidden">Toggle Dropdown</span>
+                                                        <span class="visually-hidden">Toggle Dropdown (<?php echo count($book['record_ids']); ?>)</span>
                                                     </button>
-                                                    <ul class="dropdown-menu" onclick="event.stopPropagation();">
-                                                        <li><h6 class="dropdown-header">Manage Records</h6></li>
-                                                        <li>
-                                                            <a class="dropdown-item text-success" href="#" 
-                                                            onclick="event.preventDefault(); event.stopPropagation(); confirmRestorePendingAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
-                                                                <i class="fas fa-undo me-2"></i>Restore All Records
-                                                            </a>
-                                                        </li>
+                                                    <ul class="dropdown-menu dropdown-menu-scrollable" onclick="event.stopPropagation();" style="max-height: 400px; overflow-y: auto;">
+                                                        <li><h6 class="dropdown-header sticky-top bg-white border-bottom">
+                                                            <i class="fas fa-list me-1"></i>Manage Records (<?php echo count($book['record_ids']); ?> total)
+                                                        </h6></li>
+                                                        <li><hr class="dropdown-divider mt-0"></li>
                                                         <?php foreach ($book['record_ids'] as $index => $recordId): ?>
                                                             <li>
                                                                 <a class="dropdown-item" href="#" 
                                                                 onclick="event.preventDefault(); event.stopPropagation(); restorePendingBook(<?php echo $recordId; ?>, '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
-                                                                    <i class="fas fa-undo me-2"></i>Restore Record #<?php echo $recordId; ?>
+                                                                    <i class="fas fa-undo me-2 text-success"></i>Restore Record #<?php echo $recordId; ?>
+                                                                    <small class="text-muted">(Copy <?php echo ($index + 1); ?> of <?php echo count($book['record_ids']); ?>)</small>
                                                                 </a>
                                                             </li>
                                                         <?php endforeach; ?>
                                                         <li><hr class="dropdown-divider"></li>
                                                         <li>
-                                                            <a class="dropdown-item text-danger" href="#" 
+                                                            <a class="dropdown-item text-success fw-bold" href="#" 
+                                                            onclick="event.preventDefault(); event.stopPropagation(); confirmRestorePendingAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                                <i class="fas fa-undo me-2"></i>Restore All <?php echo count($book['record_ids']); ?> Records
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger fw-bold" href="#" 
                                                             onclick="event.preventDefault(); event.stopPropagation(); confirmDeletePendingAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
-                                                                <i class="fas fa-times me-2"></i>Remove All from Pending
+                                                                <i class="fas fa-times me-2"></i>Remove All <?php echo count($book['record_ids']); ?> from Pending
                                                             </a>
                                                         </li>
                                                     </ul>
@@ -1465,24 +1503,35 @@ include '../includes/header.php';
                                                     </button>
                                                     <button type="button" class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split" 
                                                             data-bs-toggle="dropdown" aria-expanded="false"
+                                                            data-bs-auto-close="outside"
                                                             onclick="event.stopPropagation();">
-                                                        <span class="visually-hidden">Toggle Dropdown</span>
+                                                        <span class="visually-hidden">Toggle Dropdown (<?php echo count($book['record_ids']); ?>)</span>
                                                     </button>
-                                                    <ul class="dropdown-menu" onclick="event.stopPropagation();">
-                                                        <li><h6 class="dropdown-header">Manage Records</h6></li>
+                                                    <ul class="dropdown-menu dropdown-menu-scrollable" onclick="event.stopPropagation();" style="max-height: 400px; overflow-y: auto;">
+                                                        <li><h6 class="dropdown-header sticky-top bg-white border-bottom">
+                                                            <i class="fas fa-list me-1"></i>Manage Records (<?php echo count($book['record_ids']); ?> total)
+                                                        </h6></li>
+                                                        <li><hr class="dropdown-divider mt-0"></li>
                                                         <?php foreach ($book['record_ids'] as $index => $recordId): ?>
                                                             <li>
                                                                 <a class="dropdown-item" href="#" 
                                                                    onclick="event.preventDefault(); event.stopPropagation(); restoreBook(<?php echo $recordId; ?>)">
-                                                                    <i class="fas fa-undo me-2"></i>Restore Record #<?php echo $recordId; ?>
+                                                                    <i class="fas fa-undo me-2 text-success"></i>Restore Record #<?php echo $recordId; ?>
+                                                                    <small class="text-muted">(Copy <?php echo ($index + 1); ?> of <?php echo count($book['record_ids']); ?>)</small>
                                                                 </a>
                                                             </li>
                                                         <?php endforeach; ?>
                                                         <li><hr class="dropdown-divider"></li>
                                                         <li>
-                                                            <a class="dropdown-item text-danger" href="#" 
+                                                            <a class="dropdown-item text-success fw-bold" href="#" 
+                                                               onclick="event.preventDefault(); event.stopPropagation(); confirmRestoreAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
+                                                                <i class="fas fa-undo me-2"></i>Restore All <?php echo count($book['record_ids']); ?> Records
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger fw-bold" href="#" 
                                                                onclick="event.preventDefault(); event.stopPropagation(); confirmDeleteAll([<?php echo implode(',', $book['record_ids']); ?>], '<?php echo htmlspecialchars($book['title'], ENT_QUOTES); ?>')">
-                                                                <i class="fas fa-trash me-2"></i>Delete All Permanently
+                                                                <i class="fas fa-trash me-2"></i>Delete All <?php echo count($book['record_ids']); ?> Permanently
                                                             </a>
                                                         </li>
                                                     </ul>
@@ -2296,6 +2345,63 @@ style.textContent = `
             opacity: 1;
             transform: translateY(0);
         }
+    }
+    
+    /* Scrollable dropdown for 20+ records */
+    .dropdown-menu-scrollable {
+        max-height: 400px !important;
+        overflow-y: auto !important;
+    }
+    
+    /* Custom scrollbar for dropdown */
+    .dropdown-menu-scrollable {
+        scrollbar-width: thin;
+        scrollbar-color: #888 #f1f1f1;
+    }
+    
+    .dropdown-menu-scrollable::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .dropdown-menu-scrollable::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .dropdown-menu-scrollable::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    .dropdown-menu-scrollable::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+    
+    /* Sticky header and footer for dropdown */
+    .dropdown-menu .sticky-top {
+        position: sticky;
+        top: 0;
+        z-index: 1020;
+        margin: 0;
+    }
+    
+    .dropdown-menu .sticky-bottom {
+        position: sticky;
+        bottom: 0;
+        z-index: 1020;
+        margin: 0;
+    }
+    
+    /* Ensure dropdown doesn't close when scrolling */
+    .dropdown-menu-scrollable .dropdown-item {
+        white-space: normal;
+        word-wrap: break-word;
+    }
+    
+    /* Better spacing for record items */
+    .dropdown-menu-scrollable .dropdown-item small {
+        display: block;
+        margin-top: 2px;
     }
 `;
 document.head.appendChild(style);
