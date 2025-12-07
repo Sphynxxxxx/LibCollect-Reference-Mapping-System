@@ -587,7 +587,7 @@ $departments = [
 
 // Group display options
 $groupOptions = [
-    'category' => ['name' => 'Department', 'icon' => 'fas fa-layer-group'],
+    'category' => ['name' => 'Councils', 'icon' => 'fas fa-layer-group'],
     'year' => ['name' => 'Publication Year', 'icon' => 'fas fa-calendar-alt'],
     'author' => ['name' => 'Author (A-Z)', 'icon' => 'fas fa-user'],
     'archive_date' => ['name' => 'Archive Date', 'icon' => 'fas fa-clock']
@@ -1338,13 +1338,13 @@ include '../includes/header.php';
                     <div class="col-md-4 mb-2">
                         <label class="form-label">Search archived books</label>
                         <input type="text" class="form-control" name="search" 
-                               placeholder="Search by title, author, ISBN, or year..." 
+                               placeholder="Search by title, author, Call No., or year..." 
                                value="<?php echo htmlspecialchars($search); ?>">
                     </div>
                     <div class="col-md-2 mb-2">
-                        <label class="form-label">Department</label>
+                        <label class="form-label">Council</label>
                         <select class="form-control" name="category">
-                            <option value="">All Departments</option>
+                            <option value="">All Councils</option>
                             <?php foreach ($departments as $dept => $info): ?>
                                 <option value="<?php echo $dept; ?>" <?php echo ($category_filter == $dept) ? 'selected' : ''; ?>>
                                     <?php echo $dept; ?>
@@ -2180,7 +2180,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="col-md-6">
                         <h5 class="text-primary mb-3">${bookTitle}</h5>
                         <p><strong>Author:</strong> ${bookAuthor}</p>
-                        <p><strong>ISBN/Call No.:</strong> ${bookISBN}</p>
+                        <p><strong>Call No.:</strong> ${bookISBN}</p>
                         <p><strong>Publication:</strong> ${bookYear}</p>
                     </div>
                     <div class="col-md-6">

@@ -17,7 +17,6 @@ $book = new Book($pdo);
 // Initialize default stats to prevent errors
 $stats = [
     'total_books' => 0,
-    'total_copies' => 0,
     'unique_authors' => 0,
     'unique_categories' => 0,
     'unique_programs' => 0
@@ -36,7 +35,6 @@ try {
     try {
         $statsQuery = "SELECT 
             COUNT(*) as total_books,
-            SUM(quantity) as total_copies,
             COUNT(DISTINCT author) as unique_authors,
             COUNT(DISTINCT category) as unique_categories,
             COUNT(DISTINCT program) as unique_programs
@@ -68,23 +66,23 @@ try {
     $allCourses = [];
 }
 
-// Process department data - updated to match your database categories
-$departments = [
-    'BIT' => ['name' => 'Bachelor of Industrial Technology', 'books' => []],
-    'EDUCATION' => ['name' => 'Education Department', 'books' => []],
+// Process council data - updated to match your database categories
+$councils = [
+    'BINDTech' => ['name' => 'Bachelor of Industrial Technology', 'books' => []],
+    'EDUCATION' => ['name' => 'Education Council', 'books' => []],
     'HBM' => ['name' => 'Hotel and Business Management', 'books' => []],
     'COMPSTUD' => ['name' => 'Computer Studies', 'books' => []]
 ];
 
-// Group books by department - handle multi-context categories
+// Group books by council - handle multi-context categories
 if (is_array($allBooks)) {
     foreach ($allBooks as $bookItem) {
         if (isset($bookItem['category'])) {
             $categories = explode(',', $bookItem['category']);
             foreach ($categories as $category) {
                 $category = trim($category);
-                if (isset($departments[$category])) {
-                    $departments[$category]['books'][] = $bookItem;
+                if (isset($councils[$category])) {
+                    $councils[$category]['books'][] = $bookItem;
                 }
             }
         }
@@ -93,18 +91,18 @@ if (is_array($allBooks)) {
 
 // Prepare chart data with safe defaults
 $chartData = [
-    'departments' => [],
+    'councils' => [],
     'monthly_additions' => [],
     'author_distribution' => []
 ];
 
-// Department distribution for pie chart
-foreach ($departments as $code => $dept) {
-    $chartData['departments'][] = [
-        'label' => $dept['name'],
-        'value' => count($dept['books']),
+// Council distribution for pie chart
+foreach ($councils as $code => $council) {
+    $chartData['councils'][] = [
+        'label' => $council['name'],
+        'value' => count($council['books']),
         'color' => match($code) {
-            'BIT' => '#ffc107',
+            'BINDTech' => '#ffc107',
             'EDUCATION' => '#0d6efd',
             'HBM' => '#dc3545',
             'COMPSTUD' => '#212529',
@@ -209,7 +207,7 @@ try {
 
 // Handle print requests
 $printMode = isset($_GET['print']) ? $_GET['print'] : false;
-$department = isset($_GET['dept']) ? $_GET['dept'] : 'all';
+$council = isset($_GET['dept']) ? $_GET['dept'] : 'all';
 $program = isset($_GET['program']) ? $_GET['program'] : '';
 $courseCode = isset($_GET['course_code']) ? $_GET['course_code'] : '';
 $yearLevel = isset($_GET['year_level']) ? $_GET['year_level'] : '';
@@ -217,68 +215,68 @@ $semester = isset($_GET['semester']) ? $_GET['semester'] : '';
 
 // Map program codes to full names for report headers
 $programNames = [
-    // BIT Programs
-    'BIT-Electrical' => [
+    // BINDTech Programs
+    'BINDTech-Electrical' => [
         'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in ELECTRICAL TECHNOLOGY',
-        'dept' => 'BIT'
+        'council' => 'BINDTech'
     ],
-    'BIT-Electronics' => [
+    'BINDTech-Electronics' => [
         'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in ELECTRONICS TECHNOLOGY',
-        'dept' => 'BIT'
+        'council' => 'BINDTech'
     ],
-    'BIT-Automotive' => [
+    'BINDTech-Automotive' => [
         'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in AUTOMOTIVE TECHNOLOGY',
-        'dept' => 'BIT'
+        'council' => 'BINDTech'
     ],
-    'BIT-HVACR' => [
+    'BINDTech-HVACR' => [
         'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in HVAC/R TECHNOLOGY',
-        'dept' => 'BIT'
+        'council' => 'BINDTech'
     ],
     // Computer Studies Programs
     'BSIS' => [
         'full_name' => 'BACHELOR OF SCIENCE IN INFORMATION SYSTEMS',
-        'dept' => 'COMPSTUD'
+        'council' => 'COMPSTUD'
     ],
     'BSIT' => [
         'full_name' => 'BACHELOR OF SCIENCE IN INFORMATION TECHNOLOGY',
-        'dept' => 'COMPSTUD'
+        'council' => 'COMPSTUD'
     ],
     // HBM Programs
     'BSHMCA' => [
         'full_name' => 'BACHELOR OF SCIENCE IN HOSPITALITY MANAGEMENT - CULINARY ARTS',
-        'dept' => 'HBM'
+        'council' => 'HBM'
     ],
     'BSEntrep' => [
         'full_name' => 'BACHELOR OF SCIENCE IN ENTREPRENEURSHIP',
-        'dept' => 'HBM'
+        'council' => 'HBM'
     ],
     'BSTM' => [
         'full_name' => 'BACHELOR OF SCIENCE IN TOURISM MANAGEMENT',
-        'dept' => 'HBM'
+        'council' => 'HBM'
     ],
     // Education Programs
     'BTLEd-IA' => [
         'full_name' => 'BACHELOR OF TECHNOLOGY AND LIVELIHOOD EDUCATION - INDUSTRIAL ARTS',
-        'dept' => 'EDUCATION'
+        'council' => 'EDUCATION'
     ],
     'BTLEd-HE' => [
         'full_name' => 'BACHELOR OF TECHNOLOGY AND LIVELIHOOD EDUCATION - HOME ECONOMICS',
-        'dept' => 'EDUCATION'
+        'council' => 'EDUCATION'
     ],
     'BSED-Science' => [
         'full_name' => 'BACHELOR OF SECONDARY EDUCATION - SCIENCE',
-        'dept' => 'EDUCATION'
+        'council' => 'EDUCATION'
     ],
     'BSED-Math' => [
         'full_name' => 'BACHELOR OF SECONDARY EDUCATION - MATHEMATICS',
-        'dept' => 'EDUCATION'
+        'council' => 'EDUCATION'
     ]
 ];
 
 if ($printMode) {
     // Prepare print data with filters
     $printData = [
-        'department' => $department,
+        'council' => $council,
         'program' => $program,
         'program_full_name' => isset($programNames[$program]) ? $programNames[$program]['full_name'] : '',
         'course_code' => $courseCode,
@@ -300,7 +298,7 @@ include '../includes/header.php';
 
 <div class="page-header">
     <h1 class="h2 mb-2">Library Reports & Analytics</h1>
-    <p class="mb-0">Generate reports and visualize library data for ISAT U departments</p>
+    <p class="mb-0">Generate reports and visualize library data for ISAT U councils</p>
 </div>
 
 <!-- Charts Section -->
@@ -312,7 +310,7 @@ include '../includes/header.php';
             </div>
             <div class="card-body p-2">
                 <div class="chart-container-small">
-                    <canvas id="departmentChart" width="200" height="200"></canvas>
+                    <canvas id="councilChart" width="200" height="200"></canvas>
                 </div>
             </div>
         </div>
@@ -367,40 +365,28 @@ include '../includes/header.php';
             </div>
             <div class="card-body">
                 <div class="row text-center">
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <div class="stat-item">
                             <h3 class="text-primary"><?php echo isset($stats['total_books']) ? $stats['total_books'] : 0; ?></h3>
                             <p class="text-muted">Total Books</p>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <div class="stat-item">
-                            <h3 class="text-success"><?php echo count($departments); ?></h3>
-                            <p class="text-muted">Departments</p>
+                            <h3 class="text-success"><?php echo count($councils); ?></h3>
+                            <p class="text-muted">Councils</p>
                         </div>
                     </div>
-                    <div class="col-md-2">
-                        <div class="stat-item">
-                            <h3 class="text-info"><?php echo isset($stats['total_copies']) ? $stats['total_copies'] : 0; ?></h3>
-                            <p class="text-muted">Total Copies</p>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <div class="stat-item">
                             <h3 class="text-warning"><?php echo count($authorData); ?></h3>
                             <p class="text-muted">Active Authors</p>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <div class="stat-item">
                             <h3 class="text-secondary"><?php echo $additionalStats['archived_books']; ?></h3>
                             <p class="text-muted">Archived Books</p>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="stat-item">
-                            <h3 class="text-primary"><?php echo $additionalStats['multi_context']; ?></h3>
-                            <p class="text-muted">Multi-Context</p>
                         </div>
                     </div>
                 </div>
@@ -414,21 +400,21 @@ include '../includes/header.php';
     <div class="col-md-6">
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="fas fa-print me-2"></i>Department Reports</h5>
+                <h5 class="mb-0"><i class="fas fa-print me-2"></i>Council Reports</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted">Generate printable reports by department with optional filters</p>
+                <p class="text-muted">Generate printable reports by council with optional filters</p>
                 <div class="d-grid gap-2">
-                    <?php foreach ($departments as $code => $dept): ?>
-                        <div class="department-report-item mb-3">
+                    <?php foreach ($councils as $code => $council): ?>
+                        <div class="council-report-item mb-3">
                             <!-- Changed from button to styled div -->
                             <div class="p-3 border rounded bg-light">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span>
                                         <i class="fas fa-file-alt me-2"></i>
-                                        <?php echo $dept['name']; ?> Report
+                                        <?php echo $council['name']; ?> Report
                                     </span>
-                                    <span class="badge bg-primary"><?php echo count($dept['books']); ?> books</span>
+                                    <span class="badge bg-primary"><?php echo count($council['books']); ?> books</span>
                                 </div>
                             </div>
                             
@@ -437,63 +423,63 @@ include '../includes/header.php';
                                 <small class="text-muted d-block mb-2"><i class="fas fa-filter"></i> Filter by:</small>
                                 
                                 <!-- Program Filter -->
-                                <select class="form-select form-select-sm mb-2 program-filter" data-dept="<?php echo $code; ?>">
+                                <select class="form-select form-select-sm mb-2 program-filter" data-council="<?php echo $code; ?>">
                                     <option value="">All Programs</option>
                                     <?php
-                                    $deptPrograms = [];
-                                    foreach ($dept['books'] as $bookItem) {
+                                    $councilPrograms = [];
+                                    foreach ($council['books'] as $bookItem) {
                                         if (!empty($bookItem['program'])) {
                                             $program = trim($bookItem['program']);
-                                            if (!in_array($program, $deptPrograms)) {
-                                                $deptPrograms[] = $program;
+                                            if (!in_array($program, $councilPrograms)) {
+                                                $councilPrograms[] = $program;
                                             }
                                         }
                                     }
-                                    sort($deptPrograms);
-                                    foreach ($deptPrograms as $program):
+                                    sort($councilPrograms);
+                                    foreach ($councilPrograms as $program):
                                     ?>
                                         <option value="<?php echo htmlspecialchars($program); ?>"><?php echo htmlspecialchars($program); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                                 
                                 <!-- Course Code Filter -->
-                                <select class="form-select form-select-sm mb-2 course-code-filter" data-dept="<?php echo $code; ?>">
+                                <select class="form-select form-select-sm mb-2 course-code-filter" data-council="<?php echo $code; ?>">
                                     <option value="">All Course Codes</option>
                                     <?php
-                                    $deptCourseCodes = [];
-                                    foreach ($dept['books'] as $bookItem) {
+                                    $councilCourseCodes = [];
+                                    foreach ($council['books'] as $bookItem) {
                                         if (!empty($bookItem['course_code'])) {
                                             $courseCode = trim($bookItem['course_code']);
-                                            if (!in_array($courseCode, $deptCourseCodes)) {
-                                                $deptCourseCodes[] = $courseCode;
+                                            if (!in_array($courseCode, $councilCourseCodes)) {
+                                                $councilCourseCodes[] = $courseCode;
                                             }
                                         }
                                     }
-                                    sort($deptCourseCodes);
-                                    foreach ($deptCourseCodes as $courseCode):
+                                    sort($councilCourseCodes);
+                                    foreach ($councilCourseCodes as $courseCode):
                                     ?>
                                         <option value="<?php echo htmlspecialchars($courseCode); ?>"><?php echo htmlspecialchars($courseCode); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                                 
                                 <!-- Year Level Filter -->
-                                <select class="form-select form-select-sm mb-2 year-level-filter" data-dept="<?php echo $code; ?>">
+                                <select class="form-select form-select-sm mb-2 year-level-filter" data-council="<?php echo $code; ?>">
                                     <option value="">All Year Levels</option>
                                     <?php
-                                    $deptYearLevels = [];
-                                    foreach ($dept['books'] as $bookItem) {
+                                    $councilYearLevels = [];
+                                    foreach ($council['books'] as $bookItem) {
                                         if (!empty($bookItem['year_level'])) {
                                             $yearLevels = explode(',', $bookItem['year_level']);
                                             foreach ($yearLevels as $yl) {
                                                 $yl = trim($yl);
-                                                if (!in_array($yl, $deptYearLevels)) {
-                                                    $deptYearLevels[] = $yl;
+                                                if (!in_array($yl, $councilYearLevels)) {
+                                                    $councilYearLevels[] = $yl;
                                                 }
                                             }
                                         }
                                     }
                                     $yearOrder = ['First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Graduate'];
-                                    $sortedYearLevels = array_intersect($yearOrder, $deptYearLevels);
+                                    $sortedYearLevels = array_intersect($yearOrder, $councilYearLevels);
                                     foreach ($sortedYearLevels as $yearLevel):
                                     ?>
                                         <option value="<?php echo htmlspecialchars($yearLevel); ?>"><?php echo htmlspecialchars($yearLevel); ?></option>
@@ -501,23 +487,23 @@ include '../includes/header.php';
                                 </select>
                                 
                                 <!-- Semester Filter -->
-                                <select class="form-select form-select-sm mb-2 semester-filter" data-dept="<?php echo $code; ?>">
+                                <select class="form-select form-select-sm mb-2 semester-filter" data-council="<?php echo $code; ?>">
                                     <option value="">All Semesters</option>
                                     <?php
-                                    $deptSemesters = [];
-                                    foreach ($dept['books'] as $bookItem) {
+                                    $councilSemesters = [];
+                                    foreach ($council['books'] as $bookItem) {
                                         if (!empty($bookItem['semester'])) {
                                             $semesters = explode(',', $bookItem['semester']);
                                             foreach ($semesters as $sem) {
                                                 $sem = trim($sem);
-                                                if (!in_array($sem, $deptSemesters)) {
-                                                    $deptSemesters[] = $sem;
+                                                if (!in_array($sem, $councilSemesters)) {
+                                                    $councilSemesters[] = $sem;
                                                 }
                                             }
                                         }
                                     }
                                     $semesterOrder = ['First Semester', 'Second Semester', 'Summer', 'Midyear'];
-                                    $sortedSemesters = array_intersect($semesterOrder, $deptSemesters);
+                                    $sortedSemesters = array_intersect($semesterOrder, $councilSemesters);
                                     foreach ($sortedSemesters as $semester):
                                     ?>
                                         <option value="<?php echo htmlspecialchars($semester); ?>"><?php echo htmlspecialchars($semester); ?></option>
@@ -528,18 +514,18 @@ include '../includes/header.php';
                             <div class="btn-group w-100 mt-2" role="group">
                                 <a href="?print=true&dept=<?php echo $code; ?>" 
                                    class="btn btn-sm btn-outline-secondary print-btn" 
-                                   data-dept="<?php echo $code; ?>"
+                                   data-council="<?php echo $code; ?>"
                                    target="_blank">
                                     <i class="fas fa-print"></i> Print
                                 </a>
                                 <a href="export-report.php?type=csv&dept=<?php echo $code; ?>&report=detailed" 
                                    class="btn btn-sm btn-outline-secondary csv-btn"
-                                   data-dept="<?php echo $code; ?>">
+                                   data-council="<?php echo $code; ?>">
                                     <i class="fas fa-file-csv"></i> CSV
                                 </a>
                                 <a href="export-report.php?type=excel&dept=<?php echo $code; ?>&report=detailed" 
                                    class="btn btn-sm btn-outline-secondary excel-btn"
-                                   data-dept="<?php echo $code; ?>">
+                                   data-council="<?php echo $code; ?>">
                                     <i class="fas fa-file-excel"></i> Excel
                                 </a>
                             </div>
@@ -600,25 +586,25 @@ include '../includes/header.php';
 <!-- Report Preview -->
 <div class="card">
     <div class="card-header bg-info text-white">
-        <h5 class="mb-0"><i class="fas fa-eye me-2"></i>Department Overview</h5>
+        <h5 class="mb-0"><i class="fas fa-eye me-2"></i>Council Overview</h5>
     </div>
     <div class="card-body">
-        <!-- Department Statistics -->
+        <!-- Council Statistics -->
         <div class="row mb-4">
-            <?php foreach ($departments as $code => $dept): ?>
+            <?php foreach ($councils as $code => $council): ?>
                 <div class="col-md-3 mb-3">
                     <div class="card border-start border-4 border-primary">
                         <div class="card-body">
                             <h6 class="card-title"><?php echo $code; ?></h6>
-                            <p class="card-text small text-muted"><?php echo $dept['name']; ?></p>
+                            <p class="card-text small text-muted"><?php echo $council['name']; ?></p>
                             <div class="d-flex justify-content-between">
-                                <span class="text-primary fw-bold"><?php echo count($dept['books']); ?></span>
+                                <span class="text-primary fw-bold"><?php echo count($council['books']); ?></span>
                                 <small class="text-muted">books</small>
                             </div>
                             <div class="progress mt-2" style="height: 5px;">
                                 <?php 
                                 $totalBooks = isset($stats['total_books']) && $stats['total_books'] > 0 ? $stats['total_books'] : 1;
-                                $percentage = (count($dept['books']) / $totalBooks) * 100;
+                                $percentage = (count($council['books']) / $totalBooks) * 100;
                                 ?>
                                 <div class="progress-bar" style="width: <?php echo $percentage; ?>%"></div>
                             </div>
@@ -692,11 +678,11 @@ include '../includes/header.php';
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Department Filter</label>
-                            <select class="form-control" name="department" id="departmentSelect">
-                                <option value="all">All Departments</option>
-                                <?php foreach ($departments as $code => $dept): ?>
-                                    <option value="<?php echo $code; ?>"><?php echo $dept['name']; ?></option>
+                            <label class="form-label">Council Filter</label>
+                            <select class="form-control" name="council" id="councilSelect">
+                                <option value="all">All Councils</option>
+                                <?php foreach ($councils as $code => $council): ?>
+                                    <option value="<?php echo $code; ?>"><?php echo $council['name']; ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -795,7 +781,7 @@ include '../includes/header.php';
                     <textarea class="form-control" id="subjectDescription" rows="8" 
                               placeholder="Enter the description for this subject that will appear in the printed report..."></textarea>
                     <small class="text-muted">
-                        Leave blank to use the default department description. Changes will be saved for future reports.
+                        Leave blank to use the default council description. Changes will be saved for future reports.
                     </small>
                 </div>
                 
@@ -866,15 +852,15 @@ include '../includes/header.php';
 // Chart data from PHP
 const chartData = <?php echo json_encode($chartData); ?>;
 
-// Department Distribution Pie Chart
-const departmentCtx = document.getElementById('departmentChart').getContext('2d');
-new Chart(departmentCtx, {
+// Council Distribution Pie Chart
+const councilCtx = document.getElementById('councilChart').getContext('2d');
+new Chart(councilCtx, {
     type: 'pie',
     data: {
-        labels: ['BIT', 'Education', 'HBM', 'ComStud'],
+        labels: ['BINDTech', 'Education', 'HBM', 'ComStud'],
         datasets: [{
-            data: chartData.departments.map(d => d.value),
-            backgroundColor: chartData.departments.map(d => d.color),
+            data: chartData.councils.map(d => d.value),
+            backgroundColor: chartData.councils.map(d => d.color),
             borderWidth: 1,
             borderColor: '#fff'
         }]
@@ -910,12 +896,12 @@ const categoryCtx = document.getElementById('categoryChart').getContext('2d');
 new Chart(categoryCtx, {
     type: 'bar',
     data: {
-        labels: ['BIT', 'Education', 'HBM', 'ComStud'], 
+        labels: ['BINDTech', 'Education', 'HBM', 'ComStud'], 
         datasets: [{
             label: 'Books',
-            data: chartData.departments.map(d => d.value),
-            backgroundColor: chartData.departments.map(d => d.color + '80'),
-            borderColor: chartData.departments.map(d => d.color),
+            data: chartData.councils.map(d => d.value),
+            backgroundColor: chartData.councils.map(d => d.color + '80'),
+            borderColor: chartData.councils.map(d => d.color),
             borderWidth: 1
         }]
     },
@@ -1096,7 +1082,7 @@ window.addEventListener('load', function() {
 
 // Handle empty data states
 function handleEmptyData() {
-    if (chartData.departments.every(d => d.value === 0)) {
+    if (chartData.councils.every(d => d.value === 0)) {
         document.querySelector('.page-header p').innerHTML = 
             'No books found in the library. Start by adding some books to generate meaningful reports.';
     }
@@ -1104,25 +1090,25 @@ function handleEmptyData() {
 
 handleEmptyData();
 
-// Course filter functionality for department reports
+// Course filter functionality for council reports
 document.querySelectorAll('.program-filter, .course-code-filter, .year-level-filter, .semester-filter').forEach(select => {
     select.addEventListener('change', function() {
-        const dept = this.dataset.dept;
-        const deptItem = this.closest('.department-report-item');
+        const council = this.dataset.council;
+        const councilItem = this.closest('.council-report-item');
         
         // Get all filter values
-        const program = deptItem.querySelector('.program-filter').value;
-        const courseCode = deptItem.querySelector('.course-code-filter').value;
-        const yearLevel = deptItem.querySelector('.year-level-filter').value;
-        const semester = deptItem.querySelector('.semester-filter').value;
+        const program = councilItem.querySelector('.program-filter').value;
+        const courseCode = councilItem.querySelector('.course-code-filter').value;
+        const yearLevel = councilItem.querySelector('.year-level-filter').value;
+        const semester = councilItem.querySelector('.semester-filter').value;
         
         // Get all export/print buttons
-        const printBtn = deptItem.querySelector('.print-btn');
-        const csvBtn = deptItem.querySelector('.csv-btn');
-        const excelBtn = deptItem.querySelector('.excel-btn');
+        const printBtn = councilItem.querySelector('.print-btn');
+        const csvBtn = councilItem.querySelector('.csv-btn');
+        const excelBtn = councilItem.querySelector('.excel-btn');
         
         // Build URL parameters
-        let params = `dept=${dept}`;
+        let params = `dept=${council}`;
         
         if (program) {
             params += `&program=${encodeURIComponent(program)}`;
@@ -1151,7 +1137,7 @@ let printParams = {};
 
 // Override print button clicks to show description modal first
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle department print buttons
+    // Handle council print buttons
     document.querySelectorAll('.print-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
@@ -1159,7 +1145,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const url = new URL(window.location.origin + window.location.pathname + href.substring(href.indexOf('?')));
             printParams = Object.fromEntries(url.searchParams);
             
-            // Fetch subjects for this department/filter combination
+            // Fetch subjects for this council/filter combination
             fetchSubjectsForPrint(printParams);
         });
     });

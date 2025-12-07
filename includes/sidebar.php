@@ -14,7 +14,7 @@ $viewsPath = $isInViews ? '' : 'views/';
             <div class="d-flex align-items-center justify-content-center">
                 <img src="<?php echo $basePath; ?>assets/images/ISATU Logo.png" alt="ISAT U Logo" class="sidebar-logo">
             </div>
-            <div class="sidebar-text">ISAT U Library</div>
+            <div class="sidebar-text">LibCollect: Reference Mapping System</div>
         </a>
     </div>
     <nav class="sidebar-nav">

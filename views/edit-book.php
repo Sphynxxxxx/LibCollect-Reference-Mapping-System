@@ -92,15 +92,15 @@ include '../includes/header.php';
                         </div>
                         <div class="row">
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">ISBN</label>
+                                <label class="form-label">Call No.</label>
                                 <input type="text" class="form-control" name="isbn" 
                                        value="<?php echo htmlspecialchars($book_data['isbn']); ?>" 
                                        placeholder="978-XXXXXXXXXX">
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="form-label">Department/Category *</label>
+                                <label class="form-label">Council/Category *</label>
                                 <select class="form-control" name="category" required id="categorySelect">
-                                    <option value="">Select Department</option>
+                                    <option value="">Select Council</option>
                                     <option value="BIT" <?php echo ($book_data['category'] == 'BIT') ? 'selected' : ''; ?>>Bachelor of Industrial Technology (BIT)</option>
                                     <option value="EDUCATION" <?php echo ($book_data['category'] == 'EDUCATION') ? 'selected' : ''; ?>>Education</option>
                                     <option value="HBM" <?php echo ($book_data['category'] == 'HBM') ? 'selected' : ''; ?>>Hotel and Business Management (HBM)</option>

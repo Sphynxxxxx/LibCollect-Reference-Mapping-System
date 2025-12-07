@@ -27,6 +27,14 @@ if (!class_exists('Database')) {
     $database = new Database();
     $pdo = $database->connect();
 }
+
+// Get user information from session
+$userName = $_SESSION['username'] ?? 'User';
+$fullName = $_SESSION['full_name'] ?? $_SESSION['username'] ?? 'User';
+$userEmail = $_SESSION['email'] ?? '';
+
+// Use username for display
+$displayName = $userName;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -59,18 +67,39 @@ if (!class_exists('Database')) {
                 <h4 class="mb-0 text-dark"><?php echo isset($page_title) ? $page_title : 'Library Management System'; ?></h4>
             </div>
             <div class="d-flex align-items-center">
-                <span class="me-3 text-muted">Welcome, Administrator</span>
+                <span class="me-3 text-muted">
+                    Welcome, <strong><?php echo htmlspecialchars($userName); ?></strong>
+                </span>
                 <div class="dropdown">
                     <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
                         <i class="fas fa-user-circle me-1"></i>
-                        Admin
+                        <?php echo htmlspecialchars($displayName); ?>
                     </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="<?php echo $isInViews ? '' : 'views/'; ?>profiles.php"><i class="fas fa-user me-2"></i>Profile</a></li>
-                        <li><a class="dropdown-item" href="<?php echo $isInViews ? '../' : ''; ?>auth/logout.php"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li class="dropdown-header">
+                            <div class="text-center">
+                                <i class="fas fa-user-circle fa-2x mb-2 text-primary"></i>
+                                <div><strong><?php echo htmlspecialchars($fullName); ?></strong></div>
+                                <div><small class="text-muted">@<?php echo htmlspecialchars($userName); ?></small></div>
+                                <?php if (!empty($userEmail)): ?>
+                                    <div><small class="text-muted"><?php echo htmlspecialchars($userEmail); ?></small></div>
+                                <?php endif; ?>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="<?php echo $isInViews ? '' : 'views/'; ?>profiles.php">
+                            <i class="fas fa-user me-2"></i>My Profile
+                        </a></li>
+                        <li><a class="dropdown-item" href="<?php echo $isInViews ? '' : 'views/'; ?>settings.php">
+                            <i class="fas fa-cog me-2"></i>Settings
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="<?php echo $isInViews ? '../' : ''; ?>auth/logout.php">
+                            <i class="fas fa-sign-out-alt me-2"></i>Logout
+                        </a></li>
                     </ul>
                 </div>
             </div>
         </nav>
 
-        <div class="container-fluid px-4"></div>
+        <div class="container-fluid px-4">

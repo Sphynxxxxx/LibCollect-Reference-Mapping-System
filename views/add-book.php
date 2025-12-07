@@ -312,7 +312,7 @@ include '../includes/header.php';
                         
                         <div class="row">
                             <div class="col-md-12 mb-3">
-                                <label class="form-label">Department/Category *</label>
+                                <label class="form-label">Council/Category *</label>
                                 <div class="border rounded p-2" style="max-height: 120px; overflow-y: auto;">
                                     <?php
                                     $selected_categories = isset($_POST['category']) ? $_POST['category'] : [];
@@ -510,13 +510,13 @@ include '../includes/header.php';
         <!-- Department Guidelines Card -->
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="fas fa-graduation-cap me-2"></i>Department Guidelines</h5>
+                <h5 class="mb-0"><i class="fas fa-graduation-cap me-2"></i>Council Guidelines</h5>
             </div>
             <div class="card-body">
-                <h6>Academic Departments:</h6>
+                <h6>Academic Council:</h6>
                 <ul class="list-unstyled">
                     <li class="mb-2">
-                        <strong class="text-primary">BIT:</strong> 
+                        <strong class="text-primary">BINDTech:</strong> 
                         <small class="d-block text-muted">Industrial Technology, Electronics, Mechanical Engineering</small>
                     </li>
                     <li class="mb-2">

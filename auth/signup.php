@@ -64,7 +64,6 @@ if ($_POST) {
     $password = $_POST['password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
     $fullName = trim($_POST['full_name'] ?? '');
-    $role = 'staff'; // Default role set to staff
     $email = ''; // No email required
     
     // Validation
@@ -115,14 +114,14 @@ if ($_POST) {
             
             // Check which columns exist and insert accordingly
             if (in_array('full_name', $columns) && in_array('email', $columns)) {
-                $stmt = $pdo->prepare("INSERT INTO users (username, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)");
-                $result = $stmt->execute([$username, '', $hashedPassword, $fullName, $role]);
+                $stmt = $pdo->prepare("INSERT INTO users (username, email, password, full_name) VALUES (?, ?, ?, ?)");
+                $result = $stmt->execute([$username, '', $hashedPassword, $fullName]);
             } elseif (in_array('full_name', $columns)) {
-                $stmt = $pdo->prepare("INSERT INTO users (username, password, full_name, role) VALUES (?, ?, ?, ?)");
-                $result = $stmt->execute([$username, $hashedPassword, $fullName, $role]);
+                $stmt = $pdo->prepare("INSERT INTO users (username, password, full_name) VALUES (?, ?, ?)");
+                $result = $stmt->execute([$username, $hashedPassword, $fullName]);
             } else {
-                $stmt = $pdo->prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
-                $result = $stmt->execute([$username, $hashedPassword, $role]);
+                $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
+                $result = $stmt->execute([$username, $hashedPassword]);
             }
             
             if ($result) {
@@ -131,7 +130,7 @@ if ($_POST) {
                 // Log the signup activity
                 $logger->logUserActivity(
                     'signup',
-                    "New user registered: {$username} as {$role}",
+                    "New user registered: {$username}",
                     $userId,
                     $username
                 );
@@ -141,7 +140,6 @@ if ($_POST) {
                 // Auto-login the user
                 $_SESSION['user_id'] = $userId;
                 $_SESSION['username'] = $username;
-                $_SESSION['role'] = $role;
                 $_SESSION['full_name'] = $fullName;
                 header('Location: login.php');
                 exit;

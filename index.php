@@ -49,7 +49,7 @@ elseif (isset($stats['by_category']) && !empty($stats['by_category'])) {
 }
 // Manual fallback if no stats available
 else {
-    foreach (['BIT', 'EDUCATION', 'HBM', 'COMPSTUD'] as $category) {
+    foreach (['BINDTech', 'EDUCATION', 'HBM', 'COMPSTUD'] as $category) {
         try {
             $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM books WHERE FIND_IN_SET(?, category) > 0");
             $stmt->execute([$category]);
@@ -130,7 +130,7 @@ function getActivityIcon($action) {
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h3 class="text-primary mb-1"><?php echo number_format($stats['total_books']); ?></h3>
-                    <p class="text-muted mb-0">Active Books</p>
+                    <p class="text-muted mb-0">Current Copies</p>
                     <?php if (isset($stats['multi_context_books']) && $stats['multi_context_books'] > 0): ?>
                         <small class="text-info">
                             <i class="fas fa-layer-group me-1"></i><?php echo $stats['multi_context_books']; ?> multi-context
@@ -146,26 +146,12 @@ function getActivityIcon($action) {
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h3 class="text-success mb-1">4</h3>
-                    <p class="text-muted mb-0">Departments</p>
+                    <p class="text-muted mb-0">Council</p>
                     <small class="text-success">
                         <i class="fas fa-graduation-cap me-1"></i>Academic Programs
                     </small>
                 </div>
                 <i class="fas fa-layer-group fa-2x text-success"></i>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-3">
-        <div class="stats-card">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h3 class="text-info mb-1"><?php echo number_format($stats['total_copies']); ?></h3>
-                    <p class="text-muted mb-0">Total Copies</p>
-                    <small class="text-info">
-                        <i class="fas fa-copy me-1"></i>Physical books
-                    </small>
-                </div>
-                <i class="fas fa-copy fa-2x text-info"></i>
             </div>
         </div>
     </div>
@@ -202,7 +188,7 @@ function getActivityIcon($action) {
                 <div class="row text-center">
                     <?php
                     $categoryColors = [
-                        'BIT' => ['color' => 'warning', 'name' => 'Bachelor of Industrial Technology'], // Yellow
+                        'BINDTech' => ['color' => 'warning', 'name' => 'Bachelor of Industrial Technology'], // Yellow
                         'EDUCATION' => ['color' => 'primary', 'name' => 'Education'], // Blue
                         'HBM' => ['color' => 'danger', 'name' => 'Hotel & Business Management'], // Red
                         'COMPSTUD' => ['color' => 'dark', 'name' => 'Computer Studies'] // Black

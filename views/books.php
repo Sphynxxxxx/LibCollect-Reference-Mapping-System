@@ -320,7 +320,7 @@ $departments = [
         'description' => 'Manufacturing, Engineering, Technology'
     ],
     'EDUCATION' => [
-        'name' => 'Education Department',
+        'name' => 'Education',
         'color' => 'primary', 
         'icon' => 'fas fa-graduation-cap',
         'description' => 'Teaching, Learning, Pedagogy'
@@ -734,7 +734,7 @@ include '../includes/header.php';
                 <h1 class="display-4 mb-3" style="color: black;">
                     <i class="fas fa-book-open me-3" style="color: black;"></i>ISAT U Digital Library
                 </h1>
-                <p class="lead mb-4" style="color: black;">Browse books by department or search our entire collection</p>                
+                <p class="lead mb-4" style="color: black;">Browse books by Council or search our entire collection</p>                
                 <!-- Quick Search -->
                 <div class="row justify-content-center">
                     <div class="col-md-6">
@@ -775,7 +775,7 @@ include '../includes/header.php';
                             </div>
                         </div>
                         <div class="card-footer bg-<?php echo $info['color']; ?> text-white">
-                            <small><i class="fas fa-arrow-right me-1"></i>Browse <?php echo $dept; ?> Books</small>
+                            <small><i class="fas fa-arrow-right me-1"></i>Browse <?php echo ($dept === 'BIT' ? 'BINDTech' : $dept); ?> Books</small>
                         </div>
                     </div>
                 </div>
@@ -794,7 +794,7 @@ include '../includes/header.php';
                     </div>
                     <div class="col-md-3 col-6">
                         <h3 class="text-success"><?php echo count($departments); ?></h3>
-                        <p class="mb-0 text-muted">Departments</p>
+                        <p class="mb-0 text-muted">Councils</p>
                     </div>
                     <div class="col-md-3 col-6">
                         <h3 class="text-info">24/7</h3>
@@ -814,7 +814,7 @@ include '../includes/header.php';
     <!-- Books Listing Section -->
     <div class="back-button">
         <a href="books.php" class="btn btn-outline-primary">
-            <i class="fas fa-arrow-left me-1"></i>Back to Departments
+            <i class="fas fa-arrow-left me-1"></i>Back to Councils
         </a>
     </div>
 
@@ -852,9 +852,9 @@ include '../includes/header.php';
                 
                 <?php if (!$category_filter): ?>
                 <div class="col-md-3 mb-2">
-                    <label class="form-label">Department</label>
+                    <label class="form-label">Council</label>
                     <select class="form-control" name="category">
-                        <option value="">All Departments</option>
+                        <option value="">All Councils</option>
                         <?php foreach ($departments as $dept => $info): ?>
                             <option value="<?php echo $dept; ?>" <?php echo ($category_filter == $dept) ? 'selected' : ''; ?>>
                                 <?php echo $info['name']; ?>
@@ -916,7 +916,7 @@ include '../includes/header.php';
                             <i class="fas fa-times me-1"></i>Clear Search
                         </a>
                     <?php else: ?>
-                        <p class="text-muted">Be the first to add books to this department!</p>
+                        <p class="text-muted">Be the first to add books to this council!</p>
                     <?php endif; ?>
                     <a href="add-book.php<?php echo $category_filter ? '?category=' . $category_filter : ''; ?>" 
                        class="btn btn-primary">
@@ -1028,11 +1028,11 @@ include '../includes/header.php';
                                                         <?php if (isset($departments[$dept])): ?>
                                                             <span class="badge bg-<?php echo $departments[$dept]['color']; ?> me-2 mb-1">
                                                                 <i class="<?php echo $departments[$dept]['icon']; ?> me-1"></i>
-                                                                <?php echo $dept; ?>
+                                                                <?php echo ($dept === 'BIT' ? 'BINDTECH' : $dept); ?>
                                                             </span>
                                                         <?php else: ?>
                                                             <strong class="text-primary me-2 mb-1">
-                                                                <?php echo $dept; ?>
+                                                                <?php echo ($dept === 'BIT' ? 'BINDTECH' : $dept); ?>
                                                             </strong>
                                                         <?php endif; ?>
                                                         
@@ -1047,7 +1047,7 @@ include '../includes/header.php';
                                                             if (!empty($program)):
                                                         ?>
                                                             <span class="badge bg-secondary me-2 mb-1">
-                                                                <i class="fas fa-certificate me-1"></i><?php echo htmlspecialchars($program); ?>
+                                                                <i class="fas fa-certificate me-1"></i><?php echo str_replace('BIT-', 'BINDTECH-', htmlspecialchars($program)); ?>
                                                             </span>
                                                         <?php 
                                                             endif;

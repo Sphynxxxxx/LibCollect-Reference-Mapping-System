@@ -35,11 +35,25 @@ foreach ($allBooks as $bookItem) {
 
 // Define category metadata (name, icon, color)
 $categoryMetadata = [
-    'BIT' => ['name' => 'Bachelor of Industrial Technology', 'icon' => 'fas fa-microchip', 'color' => 'warning'],
+    'BINDTech' => ['name' => 'Bachelor of Industrial Technology', 'icon' => 'fas fa-microchip', 'color' => 'warning'],
     'EDUCATION' => ['name' => 'Educational Resources', 'icon' => 'fas fa-graduation-cap', 'color' => 'primary'],
     'HBM' => ['name' => 'Hotel & Business Management', 'icon' => 'fas fa-hotel', 'color' => 'danger'],
     'COMPSTUD' => ['name' => 'Computer Studies', 'icon' => 'fas fa-laptop-code', 'color' => 'dark']
 ];
+
+// Merge BIT counts into BINDTech if BIT exists
+if (isset($categoryCounts['BIT'])) {
+    if (!isset($categoryCounts['BINDTech'])) {
+        $categoryCounts['BINDTech'] = 0;
+    }
+    $categoryCounts['BINDTech'] += $categoryCounts['BIT'];
+    unset($categoryCounts['BIT']);
+}
+
+// Remove BIT from allCategories if it exists
+$allCategories = array_filter($allCategories, function($cat) {
+    return $cat !== 'BIT';
+});
 
 // For any categories not in our metadata, create default entries
 foreach ($allCategories as $cat) {
