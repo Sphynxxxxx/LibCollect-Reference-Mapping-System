@@ -49,7 +49,7 @@ elseif (isset($stats['by_category']) && !empty($stats['by_category'])) {
 }
 // Manual fallback if no stats available
 else {
-    foreach (['BINDTech', 'EDUCATION', 'HBM', 'COMPSTUD'] as $category) {
+    foreach (['BIT', 'EDUCATION', 'HBM', 'COMPSTUD'] as $category) {
         try {
             $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM books WHERE FIND_IN_SET(?, category) > 0");
             $stmt->execute([$category]);
@@ -182,16 +182,16 @@ function getActivityIcon($action) {
     <div class="col-md-6 mb-4">
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Books by Department</h5>
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Books by Council</h5>
             </div>
             <div class="card-body">
                 <div class="row text-center">
                     <?php
                     $categoryColors = [
-                        'BINDTech' => ['color' => 'warning', 'name' => 'Bachelor of Industrial Technology'], // Yellow
-                        'EDUCATION' => ['color' => 'primary', 'name' => 'Education'], // Blue
-                        'HBM' => ['color' => 'danger', 'name' => 'Hotel & Business Management'], // Red
-                        'COMPSTUD' => ['color' => 'dark', 'name' => 'Computer Studies'] // Black
+                        'BIT' => ['color' => 'warning', 'name' => 'Bachelor of Industrial Technology', 'display' => 'BINDTECH'], // Yellow
+                        'EDUCATION' => ['color' => 'primary', 'name' => 'Education', 'display' => 'EDUCATION'], // Blue
+                        'HBM' => ['color' => 'danger', 'name' => 'Hotel & Business Management', 'display' => 'HBM'], // Red
+                        'COMPSTUD' => ['color' => 'dark', 'name' => 'Computer Studies', 'display' => 'COMPSTUD'] // Black
                     ];
                 
                     
@@ -201,7 +201,7 @@ function getActivityIcon($action) {
                     <div class="col-6 mb-3">
                         <div class="category-stat p-2">
                             <h4 class="text-<?php echo $info['color']; ?> mb-1"><?php echo number_format($count); ?></h4>
-                            <span class="badge bg-<?php echo $info['color']; ?> mb-2"><?php echo $category; ?></span>
+                            <span class="badge bg-<?php echo $info['color']; ?> mb-2"><?php echo $info['display']; ?></span>
                             <p class="small text-muted mb-0 px-1"><?php echo $info['name']; ?></p>
                             <?php if ($count > 0 && $stats['total_books'] > 0): ?>
                                 <small class="text-<?php echo $info['color']; ?>">
@@ -258,7 +258,7 @@ function getActivityIcon($action) {
                                                 <i class="fas fa-book me-1"></i>
                                                 <strong>Book:</strong> <?php echo htmlspecialchars($activity['book_title']); ?>
                                                 <?php if (!empty($activity['category'])): ?>
-                                                    <span class="badge bg-secondary ms-2"><?php echo htmlspecialchars($activity['category']); ?></span>
+                                                    <span class="badge bg-secondary ms-2"><?php echo $activity['category'] === 'BIT' ? 'BINDTECH' : htmlspecialchars($activity['category']); ?></span>
                                                 <?php endif; ?>
                                             </div>
                                             <?php endif; ?>

@@ -66,12 +66,12 @@ try {
     $allCourses = [];
 }
 
-// Process council data - updated to match your database categories
+// Process council data - updated to match your database categories with display names
 $councils = [
-    'BINDTech' => ['name' => 'Bachelor of Industrial Technology', 'books' => []],
-    'EDUCATION' => ['name' => 'Education Council', 'books' => []],
-    'HBM' => ['name' => 'Hotel and Business Management', 'books' => []],
-    'COMPSTUD' => ['name' => 'Computer Studies', 'books' => []]
+    'BIT' => ['name' => 'Bachelor of Industrial Technology', 'display' => 'BINDTECH', 'books' => []],
+    'EDUCATION' => ['name' => 'Education Council', 'display' => 'EDUCATION', 'books' => []],
+    'HBM' => ['name' => 'Hotel and Business Management', 'display' => 'HBM', 'books' => []],
+    'COMPSTUD' => ['name' => 'Computer Studies', 'display' => 'COMPSTUD', 'books' => []]
 ];
 
 // Group books by council - handle multi-context categories
@@ -99,10 +99,10 @@ $chartData = [
 // Council distribution for pie chart
 foreach ($councils as $code => $council) {
     $chartData['councils'][] = [
-        'label' => $council['name'],
+        'label' => $council['display'], // Use display name instead of name
         'value' => count($council['books']),
         'color' => match($code) {
-            'BINDTech' => '#ffc107',
+            'BIT' => '#ffc107',
             'EDUCATION' => '#0d6efd',
             'HBM' => '#dc3545',
             'COMPSTUD' => '#212529',
@@ -215,22 +215,22 @@ $semester = isset($_GET['semester']) ? $_GET['semester'] : '';
 
 // Map program codes to full names for report headers
 $programNames = [
-    // BINDTech Programs
-    'BINDTech-Electrical' => [
+    // BIT Programs (display as BINDTECH in reports)
+    'BIT-Electrical' => [
         'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in ELECTRICAL TECHNOLOGY',
-        'council' => 'BINDTech'
+        'council' => 'BIT'
     ],
-    'BINDTech-Electronics' => [
+    'BIT-Electronics' => [
         'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in ELECTRONICS TECHNOLOGY',
-        'council' => 'BINDTech'
+        'council' => 'BIT'
     ],
-    'BINDTech-Automotive' => [
+    'BIT-Automotive' => [
         'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in AUTOMOTIVE TECHNOLOGY',
-        'council' => 'BINDTech'
+        'council' => 'BIT'
     ],
-    'BINDTech-HVACR' => [
+    'BIT-HVACR' => [
         'full_name' => 'BACHELOR OF INDUSTRIAL TECHNOLOGY Major in HVAC/R TECHNOLOGY',
-        'council' => 'BINDTech'
+        'council' => 'BIT'
     ],
     // Computer Studies Programs
     'BSIS' => [
@@ -412,7 +412,7 @@ include '../includes/header.php';
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span>
                                         <i class="fas fa-file-alt me-2"></i>
-                                        <?php echo $council['name']; ?> Report
+                                        <?php echo $council['display']; ?> Report
                                     </span>
                                     <span class="badge bg-primary"><?php echo count($council['books']); ?> books</span>
                                 </div>
@@ -437,8 +437,10 @@ include '../includes/header.php';
                                     }
                                     sort($councilPrograms);
                                     foreach ($councilPrograms as $program):
+                                        // Display with BINDTECH prefix if it's a BIT program
+                                        $displayProgram = str_replace('BIT-', 'BINDTECH-', $program);
                                     ?>
-                                        <option value="<?php echo htmlspecialchars($program); ?>"><?php echo htmlspecialchars($program); ?></option>
+                                        <option value="<?php echo htmlspecialchars($program); ?>"><?php echo htmlspecialchars($displayProgram); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                                 
@@ -595,7 +597,7 @@ include '../includes/header.php';
                 <div class="col-md-3 mb-3">
                     <div class="card border-start border-4 border-primary">
                         <div class="card-body">
-                            <h6 class="card-title"><?php echo $code; ?></h6>
+                            <h6 class="card-title"><?php echo $council['display']; ?></h6>
                             <p class="card-text small text-muted"><?php echo $council['name']; ?></p>
                             <div class="d-flex justify-content-between">
                                 <span class="text-primary fw-bold"><?php echo count($council['books']); ?></span>
@@ -682,7 +684,7 @@ include '../includes/header.php';
                             <select class="form-control" name="council" id="councilSelect">
                                 <option value="all">All Councils</option>
                                 <?php foreach ($councils as $code => $council): ?>
-                                    <option value="<?php echo $code; ?>"><?php echo $council['name']; ?></option>
+                                    <option value="<?php echo $code; ?>"><?php echo $council['display']; ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -857,7 +859,7 @@ const councilCtx = document.getElementById('councilChart').getContext('2d');
 new Chart(councilCtx, {
     type: 'pie',
     data: {
-        labels: ['BINDTech', 'Education', 'HBM', 'ComStud'],
+        labels: chartData.councils.map(d => d.label),
         datasets: [{
             data: chartData.councils.map(d => d.value),
             backgroundColor: chartData.councils.map(d => d.color),
@@ -883,7 +885,7 @@ new Chart(councilCtx, {
                     label: function(context) {
                         const total = context.dataset.data.reduce((a, b) => a + b, 0);
                         const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
-                        return context.parsed + ' (' + percentage + '%)';
+                        return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
                     }
                 }
             }
@@ -896,7 +898,7 @@ const categoryCtx = document.getElementById('categoryChart').getContext('2d');
 new Chart(categoryCtx, {
     type: 'bar',
     data: {
-        labels: ['BINDTech', 'Education', 'HBM', 'ComStud'], 
+        labels: chartData.councils.map(d => d.label),
         datasets: [{
             label: 'Books',
             data: chartData.councils.map(d => d.value),
